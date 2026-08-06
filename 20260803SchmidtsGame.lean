@@ -265,17 +265,141 @@ variable {X : Type*} [MetricSpace X]
 
 /-- A strategy for Alice is a function that provides a valid AliceMove
     for any possible ball B chosen by Bob. -/
+--def AliceStrategy (params : SchmidtParams) :=
+--  (B : GameBall X) → AliceMove params B-/
+-- A strategy for Alice is a function that provides a valid AliceMove
+--    for turn `n` and Bob's chosen ball `B`. -/
 def AliceStrategy (params : SchmidtParams) :=
-  (B : GameBall X) → AliceMove params B
+  (n : ℕ) → (B : GameBall X) → AliceMove params B
+-- A sequence of Bob's balls constitutes a valid play against Alice's strategy if
+--    every subsequent ball B_{n+1} is a valid BobMove inside Alice's response to B_n. -/
+--def isValidPlay {X : Type*} [MetricSpace X] (params : SchmidtParams) (fA : AliceStrategy (X := X) params)
+--    (B_seq : ℕ → GameBall X) : Prop :=
+--  ∀ n, ∃ (moveB : BobMove params (fA (B_seq n)).A), moveB.B' = B_seq (n + 1)
 /-- A sequence of Bob's balls constitutes a valid play against Alice's strategy if
-    every subsequent ball B_{n+1} is a valid BobMove inside Alice's response to B_n. -/
+    every subsequent ball B_{n+1} is a valid BobMove inside Alice's turn-n response to B_n. -/
 def isValidPlay {X : Type*} [MetricSpace X] (params : SchmidtParams) (fA : AliceStrategy (X := X) params)
     (B_seq : ℕ → GameBall X) : Prop :=
-  ∀ n, ∃ (moveB : BobMove params (fA (B_seq n)).A), moveB.B' = B_seq (n + 1)
+  ∀ n, ∃ (moveB : BobMove params (fA n (B_seq n)).A), moveB.B' = B_seq (n + 1)
 /-- Alice's strategy is winning if every valid sequence of plays against it
     results in the limit point being in the target set S. -/
+--def isWinningStrategy {X : Type*} [MetricSpace X] (params : SchmidtParams) (S : Set X)
+--    (fA : AliceStrategy (X := X) params) : Prop :=
+--  ∀ (B_seq : ℕ → GameBall X),
+--    isValidPlay params fA B_seq →
+--    ∀ (x : X), (∀ n, x ∈ (B_seq n).toSet) → x ∈ S'/-- Alice's strategy is winning if every valid sequence of plays against it
+--    results in the limit point being in the target set S. -/
 def isWinningStrategy {X : Type*} [MetricSpace X] (params : SchmidtParams) (S : Set X)
     (fA : AliceStrategy (X := X) params) : Prop :=
   ∀ (B_seq : ℕ → GameBall X),
     isValidPlay params fA B_seq →
     ∀ (x : X), (∀ n, x ∈ (B_seq n).toSet) → x ∈ S
+
+/-- A target set S is winning if Alice possesses a winning strategy for it. -/
+def IsWinningSet (params : SchmidtParams) (S : Set X) : Prop :=
+  ∃ fA : AliceStrategy (X := X) params, isWinningStrategy params S fA
+
+-- A valid sequence of plays guarantees the creation of a NestedBallSeq. -
+noncomputable def valid_play_is_nested_seq {X : Type*} [MetricSpace X] (params : SchmidtParams) 
+    (fA : AliceStrategy params) (B_seq : ℕ → GameBall X) 
+    (h_valid : isValidPlay params fA B_seq) :
+    NestedBallSeq X := by
+  
+  -- 1. Prove that each consecutive ball is nested within the previous one
+  have h_nested : ∀ n, (B_seq (n + 1)).toSet ⊆ (B_seq n).toSet := by
+    intro n
+    obtain ⟨moveB, hB_eq⟩ := h_valid n
+    -- Substitute B_{n+1} with Bob's move B'
+    rw [← hB_eq]
+    -- Transitivity: B' ⊆ A ⊆ B_n
+    exact Set.Subset.trans moveB.sub (fA n (B_seq n)).sub
+
+  -- 2. Establish that the radius strictly contracts by (α * β) each step
+  have h_radius_step : ∀ n, (B_seq (n + 1)).radius = (contractionParam params) * (B_seq n).radius := by
+    intro n
+    obtain ⟨moveB, hB_eq⟩ := h_valid n
+    calc
+      (B_seq (n + 1)).radius = moveB.B'.radius := by rw [← hB_eq]
+      _ = params.β * (fA n (B_seq n)).A.radius := moveB.r_eq
+      _ = params.β * (params.α * (B_seq n).radius) := by rw [(fA n (B_seq n)).r_eq]
+      _ = (params.α * params.β) * (B_seq n).radius := by ring
+      _ = contractionParam params * (B_seq n).radius := rfl
+
+  -- 3. Use induction to prove the closed-form formula for the n-th radius
+  have h_radius_eq : ∀ n, (B_seq n).radius = (B_seq 0).radius * contractionParam params ^ n := by
+    intro n
+    induction n with
+    | zero => simp
+    | succ n ih =>
+      calc
+        (B_seq (n + 1)).radius = contractionParam params * (B_seq n).radius := h_radius_step n
+        _ = contractionParam params * ((B_seq 0).radius * contractionParam params ^ n) := by rw [ih]
+        _ = (B_seq 0).radius * contractionParam params ^ (n + 1) := by ring
+
+  -- 4. Prove that the sequence of radii tends to 0 using the main Convergence Theorem
+  have h_radii_tendsto : Filter.Tendsto (fun n => (B_seq n).radius) Filter.atTop (nhds 0) := by
+    -- Swap out the function for our closed-form sequence
+    have h_eq : (fun n => (B_seq n).radius) = (fun n => (B_seq 0).radius * contractionParam params ^ n) := by
+      ext n
+      exact h_radius_eq n
+    rw [h_eq]
+    -- Apply the theorem already proven in the file
+    exact radius_sequence_tendsto_zero params ((B_seq 0).radius)
+
+  -- 5. Construct and return the NestedBallSeq instance
+  exact {
+    ball := B_seq
+    nested := h_nested
+    radii_tendsto := h_radii_tendsto
+  }
+
+  /-- Map a turn number n to (i, k), where i is the strategy index 
+    and k is the turn number for that strategy. -/
+def turnToStrategy (n : ℕ) : ℕ × ℕ :=
+  let m := n + 1
+  let i := padicValNat 2 m
+  let k := ((m / 2^i) - 1) / 2
+  (i, k)
+
+/-- Combine a countable sequence of Alice strategies into a single interleaved strategy. -/
+def interleavedStrategy {X : Type*} [MetricSpace X] (params : SchmidtParams)
+    (strats : ℕ → AliceStrategy (X := X) params) : AliceStrategy (X := X) params :=
+  fun n B =>
+    let (i, k) := turnToStrategy n
+    strats i k B
+
+    /-- Schmidt's Countable Intersection Theorem:
+    The intersection of countably many (α, β)-winning sets is also an (α, β)-winning set. -/
+theorem countable_intersection [CompleteSpace X] 
+    (params : SchmidtParams) (S : ℕ → Set X) 
+    (h_win : ∀ i, IsWinningSet params (S i)) :
+    IsWinningSet params (⋂ i, S i) := by
+  -- 1. Extract a winning strategy for each set S i
+--  have strats : ℕ → AliceStrategy params := fun i => (h_win i).choose
+--  have h_strats_win : ∀ i, isWinningStrategy params (S i) (strats i) := 
+--    fun i => (h_win i).choose_spec
+  -- 1. Extract the sequence of strategies `strats` and their winning proofs `h_strats`
+  -- using Mathlib's `choose` tactic
+     choose strats h_strats using h_win
+
+  -- 2. Provide the interleaved strategy as Alice's winning strategy
+     use interleavedStrategy params strats
+
+  -- 3. Show that the interleaved strategy wins for ⋂ i, S i
+     intro B_seq h_valid x hx
+  
+  -- We need to prove x ∈ ⋂ i, S i, which means x ∈ S i for all i
+     rw [Set.mem_iInter]
+     intro i
+
+  -- Apply Alice's winning strategy property for set S i
+     have h_win_i := h_strats i
+
+  -- For strategy i, construct the simulated/projected play sequence against Bob
+  -- Since x is in every ball of the full game, x lies in the sub-sequence played for strategy i
+  --   exact h_win_i B_seq (by
+    -- Show that the full sequence preserves valid moves for individual turns
+--     intro n
+--     rcases h_valid n with ⟨moveB, hmoveB⟩
+--     use moveB) x hx
+     sorry
