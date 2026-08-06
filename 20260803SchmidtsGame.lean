@@ -1,4 +1,8 @@
 import Mathlib
+--import Mathlib.Topology.MetricSpace.Basic
+--import Mathlib.Topology.Instances.Real
+--import Mathlib.Tactic.Linarith
+--import Mathlib.Tactic.Ring
 
 
 /-- Parameters for Schmidt's (α, β)-game on a metric space. -/
@@ -109,15 +113,11 @@ theorem radius_sequence_tendsto_zero (params : SchmidtParams) (r0 : ℝ) :
   -- Multiplying a sequence tending to 0 by a constant r0 still yields 0
   simpa using Filter.Tendsto.const_mul r0 h_pow
 
-
-variable {X : Type*} [MetricSpace X] [CompleteSpace X]
-
 /-- A valid infinite nested sequence of closed balls whose radii decay to zero. -/
 structure NestedBallSeq (X : Type*) [MetricSpace X] where
   ball : ℕ → GameBall X
   nested : ∀ n, (ball (n + 1)).toSet ⊆ (ball n).toSet
   radii_tendsto : Filter.Tendsto (fun n => (ball n).radius) Filter.atTop (nhds 0)
-
 /-- Cantor's Intersection Theorem for closed balls:
     An infinite sequence of nested closed balls with vanishing radii
     has a UNIQUE point of intersection x*. -/
@@ -133,7 +133,9 @@ structure NestedBallSeq (X : Type*) [MetricSpace X] where
 
 -- (Assuming NestedBallSeq is defined as before)
 
-theorem nested_balls_intersection_unique (seq : NestedBallSeq X) :
+--theorem nested_balls_intersection_unique (seq : NestedBallSeq X) :
+--    ∃! x : X, ∀ n : ℕ, x ∈ (seq.ball n).toSet := by
+theorem nested_balls_intersection_unique [CompleteSpace X] (seq : NestedBallSeq X) :
     ∃! x : X, ∀ n : ℕ, x ∈ (seq.ball n).toSet := by
 
   -- STEP 1: Define our sequences for centers and radii to make the math cleaner
@@ -169,7 +171,7 @@ theorem nested_balls_intersection_unique (seq : NestedBallSeq X) :
     have h_cm_in_BN : c m ∈ (seq.ball N).toSet := h_subset h_cm_in_Bm
 
     -- By definition of a closed ball, this bounds the distance between centers by r_N
-    have h_dist_centers : dist (c N) (c m) ≤ r N := h_cm_in_BN
+    have h_dist_centers : dist (c m) (c N) ≤ r N := h_cm_in_BN
 
     -- From the radii limit, the distance from r_N to 0 is less than ε
     have h_limit_N : dist (r N) 0 < ε := hN N (le_refl N)
@@ -193,7 +195,7 @@ theorem nested_balls_intersection_unique (seq : NestedBallSeq X) :
 --    rw [dist_comm]
 --    exact lt_of_le_of_lt h_dist_centers h_rN_lt_ε
 -- Flip the arguments of the distance function using symmetry
-    rw [dist_comm (c m) (c N)]
+--    rw [dist_comm (c m) (c N)]
     -- Chain the ≤ and < inequalities together
     exact lt_of_le_of_lt h_dist_centers h_rN_lt_ε
 
@@ -205,28 +207,52 @@ theorem nested_balls_intersection_unique (seq : NestedBallSeq X) :
   -- STEP 4: Tell Lean to use x_star to satisfy the "Exists" part of the theorem
   use x_star
 
-  -- STEP 5: The `constructor` tactic splits the remaining goal into Existence and Uniqueness
-  constructor
-
-  · -- SUB-GOAL 1: EXISTENCE (Prove x_star is in every ball B_n)
+-- STEP 5: Build the existence witness and prove it works globally first
+  have hx_star_in : ∀ n, x_star ∈ (seq.ball n).toSet := by
     intro n
-    -- Proof Strategy: B_n is a closed ball. The sequence of centers c_m
-    -- eventually lives entirely inside B_n. Because closed sets contain all
-    -- their limit points, the limit x_star must also be in B_n.
-    -- (Implemented using Mathlib's `IsClosed.mem_of_tendsto`)
-    sorry
+    have h_closed : IsClosed ((seq.ball n).toSet) := Metric.isClosed_closedBall
+    have h_subset : ∀ m, n ≤ m → (seq.ball m).toSet ⊆ (seq.ball n).toSet := by
+      intro m hm
+      induction hm with
+      | refl => exact subset_rfl
+      | step hm' ih => exact Set.Subset.trans (seq.nested _) ih
+    have h_in_eventually : ∀ᶠ m in Filter.atTop, c m ∈ (seq.ball n).toSet := by
+      filter_upwards [Filter.eventually_ge_atTop n] with m hm
+      exact h_subset m hm (Metric.mem_closedBall_self (le_of_lt (seq.ball m).r_pos))
+    exact h_closed.mem_of_tendsto hx_lim h_in_eventually
 
-  · -- SUB-GOAL 2: UNIQUENESS (Prove any other point y in all balls equals x_star)
+  -- Now we split into Existence and Uniqueness
+  constructor
+  · -- SUB-GOAL 1: EXISTENCE
+    -- Since we just proved this above, we can close this branch in one line!
+    exact hx_star_in
+
+  · -- SUB-GOAL 2: UNIQUENESS
     intro y hy
-    -- In a metric space, two points are equal if the distance between them is 0.
-    apply Metric.eq_of_dist_eq_zero
+    apply dist_eq_zero.mp
 
-    -- Proof Strategy: For any n, dist(x_star, y) ≤ dist(x_star, c_n) + dist(c_n, y).
-    -- Because both points are in B_n, the distance between them is bounded by 2 * r_n.
-    -- Since r_n limits to 0, the distance must be exactly 0.
-    -- (Implemented using `tendsto_nhds_unique` and the Squeeze Theorem)
-    sorry
-def TargetSet (X : Type*) := Set X
+    -- Now hx_star_in is safely in scope to be used here!
+    have h_dist_bound : ∀ n, dist x_star y ≤ 2 * r n := by
+      intro n
+      have hx : dist x_star (c n) ≤ r n := hx_star_in n
+      have hy_dist : dist y (c n) ≤ r n := hy n
+      calc
+        dist x_star y ≤ dist x_star (c n) + dist (c n) y := dist_triangle x_star (c n) y
+        _ = dist x_star (c n) + dist y (c n) := by rw [dist_comm (c n) y]
+        _ ≤ r n + r n := add_le_add hx hy_dist
+        _ = 2 * r n := by ring
+
+    have h_tendsto : Filter.Tendsto (fun n => 2 * r n) Filter.atTop (nhds 0) := by
+      simpa using Filter.Tendsto.const_mul 2 seq.radii_tendsto
+
+    have h_le_zero : dist x_star y ≤ 0 :=
+      ge_of_tendsto h_tendsto (Filter.Eventually.of_forall h_dist_bound)
+
+    rw [dist_comm] at h_le_zero
+
+    exact le_antisymm h_le_zero dist_nonneg
+
+abbrev TargetSet (X : Type*) := Set X
 
 /-- Alice wins a played sequence of balls if the unique intersection point lies inside S. -/
 def AliceWinsSequence (S : TargetSet X) (seq : NestedBallSeq X) : Prop :=
@@ -243,13 +269,13 @@ def AliceStrategy (params : SchmidtParams) :=
   (B : GameBall X) → AliceMove params B
 /-- A sequence of Bob's balls constitutes a valid play against Alice's strategy if
     every subsequent ball B_{n+1} is a valid BobMove inside Alice's response to B_n. -/
-def isValidPlay (params : SchmidtParams) (fA : AliceStrategy params)
+def isValidPlay {X : Type*} [MetricSpace X] (params : SchmidtParams) (fA : AliceStrategy (X := X) params)
     (B_seq : ℕ → GameBall X) : Prop :=
-  ∀ n, ∃ (moveB : BobMove params (fA (B_seq n))), moveB.B' = B_seq (n + 1)
+  ∀ n, ∃ (moveB : BobMove params (fA (B_seq n)).A), moveB.B' = B_seq (n + 1)
 /-- Alice's strategy is winning if every valid sequence of plays against it
     results in the limit point being in the target set S. -/
-def isWinningStrategy (params : SchmidtParams) (S : Set X)
-    (fA : AliceStrategy params) : Prop :=
+def isWinningStrategy {X : Type*} [MetricSpace X] (params : SchmidtParams) (S : Set X)
+    (fA : AliceStrategy (X := X) params) : Prop :=
   ∀ (B_seq : ℕ → GameBall X),
     isValidPlay params fA B_seq →
     ∀ (x : X), (∀ n, x ∈ (B_seq n).toSet) → x ∈ S
