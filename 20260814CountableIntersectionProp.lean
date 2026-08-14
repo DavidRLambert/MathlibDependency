@@ -229,8 +229,36 @@ theorem countable_intersection_alpha [CompleteSpace X]
 
   have h_sub_valid : isValidPlay (sub_params i) (strats i) (subBallSeq i B_seq) := by
     intro k
-    -- Use play_nesting_step and play_radius_step with m = 2^(i + 1)
-    sorry
+    let n := turnIdx i k
+    let m := 2^(i + 1)
+    have hm : 1 ≤ m := Nat.one_le_two_pow
+    have h_gap : turnIdx i (k + 1) = n + m := turnIdx_succ_gap i k
+    
+    -- Evaluate the interleaved strategy on turn n to recover sub-strategy i
+    have h_strat_eval :
+        (interleavedStrategy params sub_params hα_eq strats n (B_seq n)).A =
+        (strats i k (subBallSeq i B_seq k)).A := by
+      dsimp [interleavedStrategy, subBallSeq, n]
+      rw [turnToStrategy_turnIdx]
+
+    -- Step containment and radius scaling across m physical steps
+    have h_sub := play_subset_step h_valid n m hm
+    have h_rad := play_radius_step h_valid n m hm
+    rw [h_strat_eval] at h_sub h_rad
+
+    -- Package Bob's simulated move in sub-game i
+    let moveB : BobMove (sub_params i) (strats i k (subBallSeq i B_seq k)).A := {
+      B'   := subBallSeq i B_seq (k + 1)
+      sub  := by
+        dsimp [subBallSeq]
+        rw [h_gap]
+        exact h_sub
+      r_eq := by
+        dsimp [subBallSeq, sub_params, schmidtBeta]
+        rw [h_gap]
+        exact h_rad
+    }
+    exact ⟨moveB, rfl⟩
 
   have h_x_in_sub : ∀ k, x ∈ (subBallSeq i B_seq k).toSet := by
     intro k
