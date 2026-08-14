@@ -72,12 +72,16 @@ def turnToStrategy (n : ℕ) : ℕ × ℕ :=
   let k := ((m / 2^i) - 1) / 2
   (i, k)
 
-/-- Combine a countable sequence of Alice strategies into a single interleaved strategy. -/
+/-- Combine heterogeneous sub-game strategies where α is constant across all games. -/
 def interleavedStrategy {X : Type*} [MetricSpace X] (params : SchmidtParams)
-    (strats : ℕ → AliceStrategy (X := X) params) : AliceStrategy (X := X) params :=
+    (sub_params : ℕ → SchmidtParams) (hα : ∀ i, (sub_params i).α = params.α)
+    (strats : (i : ℕ) → AliceStrategy (X:=X) (sub_params i)) : AliceStrategy (X:=X) params :=
   fun n B =>
     let (i, k) := turnToStrategy n
-    strats i k B
+    let move := strats i k B
+    { A := move.A
+      sub := move.sub
+      r_eq := by rw [move.r_eq, hα i] }
 
     /-- Schmidt's Countable Intersection Theorem:
     The intersection of countably many (α, β)-winning sets is also an (α, β)-winning set. -/
@@ -106,13 +110,44 @@ lemma schmidtBeta_lt {α β : ℝ} (hα_pos : 0 < α) (hα_lt : α < 1)
   have : 0 ≤ β ^ (2^(i + 1)) := by positivity
   nlinarith
 
+/-- The physical game turn corresponding to round k of sub-strategy i. -/
+def turnIdx (i k : ℕ) : ℕ :=
+  2^(i + 1) * k + 2^i - 1
+
+/-- Extract the subsequence of balls visible to sub-game i. -/
+def subBallSeq (i : ℕ) (B_seq : ℕ → GameBall X) : ℕ → GameBall X :=
+  fun k => B_seq (turnIdx i k)
+
+/-- Step gap between consecutive turns of sub-game i. -/
+lemma turnIdx_succ_gap (i k : ℕ) :
+    turnIdx i (k + 1) = turnIdx i k + 2^(i + 1) := by
+  unfold turnIdx
+  ring_nf
+  sorry
+
+  /-- Ball containment over m elapsed game steps. -/
+lemma play_nesting_step {params : SchmidtParams} {fA : AliceStrategy (X := X) params}
+    {B_seq : ℕ → GameBall X} (h_valid : isValidPlay params fA B_seq) (n : ℕ) :
+    (B_seq (n + 1)).toSet ⊆ (fA n (B_seq n)).A.toSet ∧
+    (fA n (B_seq n)).A.toSet ⊆ (B_seq n).toSet :=
+    let ⟨moveB, hB_eq⟩ := h_valid n
+    ⟨hB_eq ▸ moveB.sub, (fA n (B_seq n)).sub⟩
+
+/-- Radius equation after m steps from Alice's move A_n. -/
+lemma play_radius_step {params : SchmidtParams} {fA : AliceStrategy params}
+    {B_seq : ℕ → GameBall X} (h_valid : isValidPlay params fA B_seq) (n m : ℕ) (hm : 1 ≤ m) :
+    (B_seq (n + m)).radius =
+      (params.α ^ (m - 1) * params.β ^ m) * (fA n (B_seq n)).A.radius := by
+  sorry
+
 theorem countable_intersection_alpha [CompleteSpace X]
     (α : ℝ) (hα_pos : 0 < α) (hα_lt : α < 1)
     (S : ℕ → Set X) (h_win : ∀ i, IsAlphaWinning α hα_pos hα_lt (S i)) :
     IsAlphaWinning α hα_pos hα_lt (⋂ i, S i) := by
   intro β hβ_pos hβ_lt
 
-  -- 1. Construct the tailored SchmidtParams sequence for each sub-game i
+  let params : SchmidtParams := ⟨α, β, hα_pos, hα_lt, hβ_pos, hβ_lt⟩
+
   let sub_params : ℕ → SchmidtParams := fun i => {
     α := α
     β := schmidtBeta α β i
@@ -122,15 +157,29 @@ theorem countable_intersection_alpha [CompleteSpace X]
     hβ_lt  := schmidtBeta_lt hα_pos hα_lt hβ_pos hβ_lt i
   }
 
-  -- 2. Specialize the α-winning hypothesis for each target set S i
+  have hα_eq : ∀ i, (sub_params i).α = params.α := fun _ => rfl
+
   have h_sub_win : ∀ i, IsWinningSet (sub_params i) (S i) := by
     intro i
     exact h_win i (schmidtBeta α β i)
       (schmidtBeta_pos hα_pos hβ_pos i)
       (schmidtBeta_lt hα_pos hα_lt hβ_pos hβ_lt i)
 
-  -- 3. Extract the family of tailored winning strategies and proofs
   choose strats h_strats using h_sub_win
 
-  -- (Next step: construct the interleaved strategy using `strats` and verify containment)
-  sorry
+  use interleavedStrategy params sub_params hα_eq strats
+  intro B_seq h_valid x hx
+
+  rw [Set.mem_iInter]
+  intro i
+
+  have h_sub_valid : isValidPlay (sub_params i) (strats i) (subBallSeq i B_seq) := by
+    intro k
+    -- Use play_nesting_step and play_radius_step with m = 2^(i + 1)
+    sorry
+
+  have h_x_in_sub : ∀ k, x ∈ (subBallSeq i B_seq k).toSet := by
+    intro k
+    exact hx (turnIdx i k)
+
+  exact h_strats i (subBallSeq i B_seq) h_sub_valid x h_x_in_sub
