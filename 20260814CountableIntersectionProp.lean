@@ -85,10 +85,52 @@ def IsAlphaWinning (α : ℝ) (hα_pos : 0 < α) (hα_lt : α < 1) (S : Set X) :
   ∀ (β : ℝ) (hβ_pos : 0 < β) (hβ_lt : β < 1),
     IsWinningSet ⟨α, β, hα_pos, hα_lt, hβ_pos, hβ_lt⟩ S
 
+/-- The tailored contraction parameter β_i for the i-th interleaved sub-game. -/
+def schmidtBeta (α β : ℝ) (i : ℕ) : ℝ :=
+  α ^ (2^(i + 1) - 1) * β ^ (2^(i + 1))
+
+/-- Proof that 0 < β_i. -/
+lemma schmidtBeta_pos {α β : ℝ} (hα : 0 < α) (hβ : 0 < β) (i : ℕ) :
+    0 < schmidtBeta α β i := by
+  unfold schmidtBeta
+  positivity
+
+/-- Proof that β_i < 1. -/
+lemma schmidtBeta_lt {α β : ℝ} (hα_pos : 0 < α) (hα_lt : α < 1)
+    (hβ_pos : 0 < β) (hβ_lt : β < 1) (i : ℕ) :
+    schmidtBeta α β i < 1 := by
+  unfold schmidtBeta
+  have hα : α ^ (2^(i + 1) - 1) ≤ 1 := pow_le_one₀ hα_pos.le hα_lt.le
+  have hβ : β ^ (2^(i + 1)) < 1 := pow_lt_one₀ hβ_pos.le hβ_lt (by positivity)
+  have : 0 ≤ α ^ (2^(i + 1) - 1) := by positivity
+  have : 0 ≤ β ^ (2^(i + 1)) := by positivity
+  nlinarith
+
 theorem countable_intersection_alpha [CompleteSpace X]
     (α : ℝ) (hα_pos : 0 < α) (hα_lt : α < 1)
     (S : ℕ → Set X) (h_win : ∀ i, IsAlphaWinning α hα_pos hα_lt (S i)) :
     IsAlphaWinning α hα_pos hα_lt (⋂ i, S i) := by
   intro β hβ_pos hβ_lt
-  -- Now you can instantiate each S i with the exact β_i required by your interleaving schedule
+
+  -- 1. Construct the tailored SchmidtParams sequence for each sub-game i
+  let sub_params : ℕ → SchmidtParams := fun i => {
+    α := α
+    β := schmidtBeta α β i
+    hα_pos := hα_pos
+    hα_lt  := hα_lt
+    hβ_pos := schmidtBeta_pos hα_pos hβ_pos i
+    hβ_lt  := schmidtBeta_lt hα_pos hα_lt hβ_pos hβ_lt i
+  }
+
+  -- 2. Specialize the α-winning hypothesis for each target set S i
+  have h_sub_win : ∀ i, IsWinningSet (sub_params i) (S i) := by
+    intro i
+    exact h_win i (schmidtBeta α β i)
+      (schmidtBeta_pos hα_pos hβ_pos i)
+      (schmidtBeta_lt hα_pos hα_lt hβ_pos hβ_lt i)
+
+  -- 3. Extract the family of tailored winning strategies and proofs
+  choose strats h_strats using h_sub_win
+
+  -- (Next step: construct the interleaved strategy using `strats` and verify containment)
   sorry
