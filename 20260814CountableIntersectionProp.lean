@@ -118,13 +118,6 @@ def turnIdx (i k : ℕ) : ℕ :=
 def subBallSeq (i : ℕ) (B_seq : ℕ → GameBall X) : ℕ → GameBall X :=
   fun k => B_seq (turnIdx i k)
 
-/-- Step gap between consecutive turns of sub-game i. -/
-lemma turnIdx_succ_gap (i k : ℕ) :
-    turnIdx i (k + 1) = turnIdx i k + 2^(i + 1) := by
-  unfold turnIdx
-  ring_nf
-  sorry
-
   /-- Ball containment over m elapsed game steps. -/
 lemma play_nesting_step {params : SchmidtParams} {fA : AliceStrategy (X := X) params}
     {B_seq : ℕ → GameBall X} (h_valid : isValidPlay params fA B_seq) (n : ℕ) :
@@ -133,12 +126,73 @@ lemma play_nesting_step {params : SchmidtParams} {fA : AliceStrategy (X := X) pa
     let ⟨moveB, hB_eq⟩ := h_valid n
     ⟨hB_eq ▸ moveB.sub, (fA n (B_seq n)).sub⟩
 
-/-- Radius equation after m steps from Alice's move A_n. -/
+/-- Step gap between consecutive turns of sub-game i. -/
+lemma turnIdx_succ_gap (i k : ℕ) :
+    turnIdx i (k + 1) = turnIdx i k + 2^(i + 1) := by
+  unfold turnIdx
+  have : 1 ≤ 2^i := Nat.one_le_two_pow
+  rw [mul_add, mul_one]
+  omega
+  
+
+/-- The strategy selector correctly identifies sub-game i at turnIdx i k. -/
+lemma turnToStrategy_turnIdx (i k : ℕ) :
+    turnToStrategy (turnIdx i k) = (i, k) := by
+  unfold turnToStrategy turnIdx
+  have h_eq : 2^(i + 1) * k + 2^i - 1 + 1 = 2^i * (2 * k + 1) := by
+    have h_pos : 1 ≤ 2^(i + 1) * k + 2^i := by
+      have : 1 ≤ 2^i := Nat.one_le_two_pow
+      omega
+    rw [Nat.sub_add_cancel h_pos, pow_succ]
+    ring
+  dsimp only
+  rw [h_eq]
+  have h_odd : ¬ 2 ∣ 2 * k + 1 := by omega
+  have : Fact (Nat.Prime 2) := ⟨Nat.prime_two⟩
+  have h_padic : padicValNat 2 (2^i * (2 * k + 1)) = i := by
+    rw [padicValNat.mul (by positivity) (by omega)]
+    rw [padicValNat.prime_pow, padicValNat.eq_zero_of_not_dvd h_odd, add_zero]
+  have h_div : 2^i * (2 * k + 1) / 2^i = 2 * k + 1 :=
+    Nat.mul_div_cancel_left _ (by positivity)
+  ext
+  · exact h_padic
+  · dsimp
+    rw [h_padic, h_div]
+    omega
+
+/-- Ball containment across m elapsed physical game steps. -/
+lemma play_subset_step {params : SchmidtParams} {fA : AliceStrategy params}
+    {B_seq : ℕ → GameBall X} (h_valid : isValidPlay params fA B_seq) (n : ℕ) :
+    ∀ m ≥ 1, (B_seq (n + m)).toSet ⊆ (fA n (B_seq n)).A.toSet
+  | 1, _ => (play_nesting_step h_valid n).1
+  | m + 2, _ => by
+    have ih := play_subset_step h_valid n (m + 1) (by omega)
+    have step := (play_nesting_step h_valid (n + m + 1)).1
+    have step_sub := (play_nesting_step h_valid (n + m + 1)).2
+    exact step.trans (step_sub.trans ih)
+
+/-- Radius scaling across m elapsed physical game steps. -/
 lemma play_radius_step {params : SchmidtParams} {fA : AliceStrategy params}
-    {B_seq : ℕ → GameBall X} (h_valid : isValidPlay params fA B_seq) (n m : ℕ) (hm : 1 ≤ m) :
-    (B_seq (n + m)).radius =
-      (params.α ^ (m - 1) * params.β ^ m) * (fA n (B_seq n)).A.radius := by
-  sorry
+    {B_seq : ℕ → GameBall X} (h_valid : isValidPlay params fA B_seq) (n : ℕ) :
+    ∀ m ≥ 1, (B_seq (n + m)).radius =
+      (params.α ^ (m - 1) * params.β ^ m) * (fA n (B_seq n)).A.radius
+  | 1, _ => by
+    obtain ⟨moveB, hB⟩ := h_valid n
+    have h0 : 1 - 1 = 0 := rfl
+    rw [← hB, moveB.r_eq, h0, pow_zero, pow_one]
+    ring
+  | m + 2, _ => by
+    have ih := play_radius_step h_valid n (m + 1) (by omega)
+    obtain ⟨moveB, hB⟩ := h_valid (n + m + 1)
+    have hA_rad := (fA (n + m + 1) (B_seq (n + m + 1))).r_eq
+    have h_idx1 : n + (m + 2) = (n + m + 1) + 1 := by omega
+    have h_idx2 : n + m + 1 = n + (m + 1) := by omega
+    have h1 : m + 1 - 1 = m := by omega
+    have h2 : m + 2 - 1 = m + 1 := by omega
+    have h3 : m + 2 = m + 1 + 1 := by omega
+    rw [h_idx1, ← hB, moveB.r_eq, hA_rad, h_idx2, ih]
+    rw [h1, h2, h3, pow_succ params.α m, pow_succ params.β (m + 1)]
+    ring
 
 theorem countable_intersection_alpha [CompleteSpace X]
     (α : ℝ) (hα_pos : 0 < α) (hα_lt : α < 1)
