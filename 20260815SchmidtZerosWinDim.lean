@@ -43,6 +43,143 @@ structure BobMove (params : SchmidtParams) (A : GameBall X) where
   sub : IsSubBall B' A
   r_eq : B'.radius = params.β * A.radius
 
+/-- The combined contraction parameter q = α * β -/
+def contractionParam (params : SchmidtParams) : ℝ :=
+  params.α * params.β
+
+/-- Proof that 0 < α * β < 1 -/
+lemma contraction_in_bounds (params : SchmidtParams) :
+    0 < contractionParam params ∧ contractionParam params < 1 := by
+  constructor
+  · unfold contractionParam
+    nlinarith [params.hα_pos, params.hβ_pos]
+  · unfold contractionParam
+    nlinarith [params.hα_pos, params.hα_lt, params.hβ_pos, params.hβ_lt]
+
+/-- Main Convergence Theorem: The sequence of radii r_0 * (α * β)^n tends to 0 as n -> ∞ -/
+theorem radius_sequence_tendsto_zero (params : SchmidtParams) (r0 : ℝ) :
+    Filter.Tendsto (fun (n : ℕ) => r0 * (contractionParam params) ^ n)
+    Filter.atTop (nhds 0) := by
+  have h_bounds := contraction_in_bounds params
+  -- Apply Mathlib's theorem that q^n -> 0 when |q| < 1, then multiply by constant r0
+  have h_pow : Filter.Tendsto (fun (n : ℕ) => (contractionParam params) ^ n) Filter.atTop (nhds 0) := by
+    apply tendsto_pow_atTop_nhds_zero_of_lt_one
+    · linarith [h_bounds.1]
+    · exact h_bounds.2
+  -- Multiplying a sequence tending to 0 by a constant r0 still yields 0
+  simpa using Filter.Tendsto.const_mul r0 h_pow
+
+/-- A valid infinite nested sequence of closed balls whose radii decay to zero. -/
+structure NestedBallSeq (X : Type*) [MetricSpace X] where
+  ball : ℕ → GameBall X
+  nested : ∀ n, (ball (n + 1)).toSet ⊆ (ball n).toSet
+  radii_tendsto : Filter.Tendsto (fun n => (ball n).radius) Filter.atTop (nhds 0)
+
+/-- Cantor's Intersection Theorem for closed balls:
+    An infinite sequence of nested closed balls with vanishing radii
+    has a UNIQUE point of intersection x*. -/
+theorem nested_balls_intersection_unique [CompleteSpace X] (seq : NestedBallSeq X) :
+    ∃! x : X, ∀ n : ℕ, x ∈ (seq.ball n).toSet := by
+
+  -- STEP 1: Define our sequences for centers and radii to make the math cleaner
+  let c := fun n => (seq.ball n).center
+  let r := fun n => (seq.ball n).radius
+
+  -- STEP 2: Prove the sequence of centers is a Cauchy sequence
+  have hCauchy : CauchySeq c := by
+    -- Use the alternative metric characterization for Cauchy sequences
+    apply Metric.cauchySeq_iff'.mpr
+    intro ε hε
+
+    -- From seq.radii_tendsto, the radii eventually become smaller than ε
+    have h_tendsto := Metric.tendsto_atTop.mp seq.radii_tendsto ε hε
+    rcases h_tendsto with ⟨N, hN⟩
+
+    -- Provide this N as the Cauchy bound
+    use N
+    intro m hm
+
+    -- Prove that since m ≥ N, ball m is entirely nested inside ball N
+    have h_subset : (seq.ball m).toSet ⊆ (seq.ball N).toSet := by
+      induction hm with
+      | refl => exact subset_rfl
+      | step hm' ih => exact Set.Subset.trans (seq.nested _) ih
+
+    -- The center of ball m is inside ball m (distance is 0 ≤ r_m)
+    have h_cm_in_Bm : c m ∈ (seq.ball m).toSet :=
+      Metric.mem_closedBall_self (le_of_lt (seq.ball m).r_pos)
+
+    -- Therefore, by our nesting property, the center of ball m is also in ball N
+    have h_cm_in_BN : c m ∈ (seq.ball N).toSet := h_subset h_cm_in_Bm
+
+    -- By definition of a closed ball, this bounds the distance between centers by r_N
+    have h_dist_centers : dist (c m) (c N) ≤ r N := h_cm_in_BN
+
+    -- From the radii limit, the distance from r_N to 0 is less than ε
+    have h_limit_N : dist (r N) 0 < ε := hN N (le_refl N)
+
+-- Convert the metric distance on ℝ to a strict inequality r N < ε
+    have h_rN_lt_ε : r N < ε := by
+      calc
+        r N ≤ |r N| := le_abs_self (r N)
+        _ = |r N - 0| := by rw [sub_zero]
+        _ = dist (r N) 0 := (Real.dist_eq (r N) 0).symm
+        _ < ε := h_limit_N
+    exact lt_of_le_of_lt h_dist_centers h_rN_lt_ε
+
+  -- STEP 3: Because X is a [CompleteSpace], we can extract the limit point x*
+  -- `cauchySeq_tendsto_of_complete` is the Mathlib theorem that bridges
+  -- Cauchy sequences to topological limits.
+  rcases cauchySeq_tendsto_of_complete hCauchy with ⟨x_star, hx_lim⟩
+
+  -- STEP 4: Tell Lean to use x_star to satisfy the "Exists" part of the theorem
+  use x_star
+
+-- STEP 5: Build the existence witness and prove it works globally first
+  have hx_star_in : ∀ n, x_star ∈ (seq.ball n).toSet := by
+    intro n
+    have h_closed : IsClosed ((seq.ball n).toSet) := Metric.isClosed_closedBall
+    have h_subset : ∀ m, n ≤ m → (seq.ball m).toSet ⊆ (seq.ball n).toSet := by
+      intro m hm
+      induction hm with
+      | refl => exact subset_rfl
+      | step hm' ih => exact Set.Subset.trans (seq.nested _) ih
+    have h_in_eventually : ∀ᶠ m in Filter.atTop, c m ∈ (seq.ball n).toSet := by
+      filter_upwards [Filter.eventually_ge_atTop n] with m hm
+      exact h_subset m hm (Metric.mem_closedBall_self (le_of_lt (seq.ball m).r_pos))
+    exact h_closed.mem_of_tendsto hx_lim h_in_eventually
+
+  -- Now we split into Existence and Uniqueness
+  constructor
+  · -- SUB-GOAL 1: EXISTENCE
+    -- Since we just proved this above, we can close this branch in one line!
+    exact hx_star_in
+
+  · -- SUB-GOAL 2: UNIQUENESS
+    intro y hy
+    apply dist_eq_zero.mp
+
+    -- Now hx_star_in is safely in scope to be used here!
+    have h_dist_bound : ∀ n, dist x_star y ≤ 2 * r n := by
+      intro n
+      have hx : dist x_star (c n) ≤ r n := hx_star_in n
+      have hy_dist : dist y (c n) ≤ r n := hy n
+      calc
+        dist x_star y ≤ dist x_star (c n) + dist (c n) y := dist_triangle x_star (c n) y
+        _ = dist x_star (c n) + dist y (c n) := by rw [dist_comm (c n) y]
+        _ ≤ r n + r n := add_le_add hx hy_dist
+        _ = 2 * r n := by ring
+
+    have h_tendsto : Filter.Tendsto (fun n => 2 * r n) Filter.atTop (nhds 0) := by
+      simpa using Filter.Tendsto.const_mul 2 seq.radii_tendsto
+
+    have h_le_zero : dist x_star y ≤ 0 :=
+      ge_of_tendsto h_tendsto (Filter.Eventually.of_forall h_dist_bound)
+
+    rw [dist_comm] at h_le_zero
+
+    exact le_antisymm h_le_zero dist_nonneg
+
 /-- A strategy for Alice is a function that provides a valid AliceMove
     for any possible ball B chosen by Bob. -/
 def AliceStrategy (params : SchmidtParams) :=
@@ -69,6 +206,205 @@ def IsWinningSet (params : SchmidtParams) (S : Set X) : Prop :=
 def IsAlphaWinning (α : ℝ) (hα_pos : 0 < α) (hα_lt : α < 1) (S : Set X) : Prop :=
   ∀ (β : ℝ) (hβ_pos : 0 < β) (hβ_lt : β < 1),
     IsWinningSet ⟨α, β, hα_pos, hα_lt, hβ_pos, hβ_lt⟩ S
+
+  /-- Map a turn number n to (i, k), where i is the strategy index 
+    and k is the turn number for that strategy. -/
+def turnToStrategy (n : ℕ) : ℕ × ℕ :=
+  let m := n + 1
+  let i := padicValNat 2 m
+  let k := ((m / 2^i) - 1) / 2
+  (i, k)
+
+/-- Combine heterogeneous sub-game strategies where α is constant across all games. -/
+def interleavedStrategy {X : Type*} [MetricSpace X] (params : SchmidtParams)
+    (sub_params : ℕ → SchmidtParams) (hα : ∀ i, (sub_params i).α = params.α)
+    (strats : (i : ℕ) → AliceStrategy (X:=X) (sub_params i)) : AliceStrategy (X:=X) params :=
+  fun n B =>
+    let (i, k) := turnToStrategy n
+    let move := strats i k B
+    { A := move.A
+      sub := move.sub
+      r_eq := by rw [move.r_eq, hα i] }
+
+-- Schmidt's Countable Intersection Theorem: 
+--The intersection of countably many (α, β)-winning sets is also an (α, β)-winning set. 
+
+/-- The tailored contraction parameter β_i for the i-th interleaved sub-game. -/
+def schmidtBeta (α β : ℝ) (i : ℕ) : ℝ :=
+  α ^ (2^(i + 1) - 1) * β ^ (2^(i + 1))
+
+/-- Proof that 0 < β_i. -/
+lemma schmidtBeta_pos {α β : ℝ} (hα : 0 < α) (hβ : 0 < β) (i : ℕ) :
+    0 < schmidtBeta α β i := by
+  unfold schmidtBeta
+  positivity
+
+/-- Proof that β_i < 1. -/
+lemma schmidtBeta_lt {α β : ℝ} (hα_pos : 0 < α) (hα_lt : α < 1)
+    (hβ_pos : 0 < β) (hβ_lt : β < 1) (i : ℕ) :
+    schmidtBeta α β i < 1 := by
+  unfold schmidtBeta
+  have hα : α ^ (2^(i + 1) - 1) ≤ 1 := pow_le_one₀ hα_pos.le hα_lt.le
+  have hβ : β ^ (2^(i + 1)) < 1 := pow_lt_one₀ hβ_pos.le hβ_lt (by positivity)
+  have : 0 ≤ α ^ (2^(i + 1) - 1) := by positivity
+  have : 0 ≤ β ^ (2^(i + 1)) := by positivity
+  nlinarith
+
+/-- The physical game turn corresponding to round k of sub-strategy i. -/
+def turnIdx (i k : ℕ) : ℕ :=
+  2^(i + 1) * k + 2^i - 1
+
+/-- Extract the subsequence of balls visible to sub-game i. -/
+def subBallSeq (i : ℕ) (B_seq : ℕ → GameBall X) : ℕ → GameBall X :=
+  fun k => B_seq (turnIdx i k)
+
+  /-- Ball containment over m elapsed game steps. -/
+lemma play_nesting_step {params : SchmidtParams} {fA : AliceStrategy (X := X) params}
+    {B_seq : ℕ → GameBall X} (h_valid : isValidPlay params fA B_seq) (n : ℕ) :
+    (B_seq (n + 1)).toSet ⊆ (fA n (B_seq n)).A.toSet ∧
+    (fA n (B_seq n)).A.toSet ⊆ (B_seq n).toSet :=
+    let ⟨moveB, hB_eq⟩ := h_valid n
+    ⟨hB_eq ▸ moveB.sub, (fA n (B_seq n)).sub⟩
+
+/-- Step gap between consecutive turns of sub-game i. -/
+lemma turnIdx_succ_gap (i k : ℕ) :
+    turnIdx i (k + 1) = turnIdx i k + 2^(i + 1) := by
+  unfold turnIdx
+  have : 1 ≤ 2^i := Nat.one_le_two_pow
+  rw [mul_add, mul_one]
+  omega
+  
+
+/-- The strategy selector correctly identifies sub-game i at turnIdx i k. -/
+lemma turnToStrategy_turnIdx (i k : ℕ) :
+    turnToStrategy (turnIdx i k) = (i, k) := by
+  unfold turnToStrategy turnIdx
+  have h_eq : 2^(i + 1) * k + 2^i - 1 + 1 = 2^i * (2 * k + 1) := by
+    have h_pos : 1 ≤ 2^(i + 1) * k + 2^i := by
+      have : 1 ≤ 2^i := Nat.one_le_two_pow
+      omega
+    rw [Nat.sub_add_cancel h_pos, pow_succ]
+    ring
+  dsimp only
+  rw [h_eq]
+  have h_odd : ¬ 2 ∣ 2 * k + 1 := by omega
+  have : Fact (Nat.Prime 2) := ⟨Nat.prime_two⟩
+  have h_padic : padicValNat 2 (2^i * (2 * k + 1)) = i := by
+    rw [padicValNat.mul (by positivity) (by omega)]
+    rw [padicValNat.prime_pow, padicValNat.eq_zero_of_not_dvd h_odd, add_zero]
+  have h_div : 2^i * (2 * k + 1) / 2^i = 2 * k + 1 :=
+    Nat.mul_div_cancel_left _ (by positivity)
+  ext
+  · exact h_padic
+  · dsimp
+    rw [h_padic, h_div]
+    omega
+
+/-- Ball containment across m elapsed physical game steps. -/
+lemma play_subset_step {params : SchmidtParams} {fA : AliceStrategy params}
+    {B_seq : ℕ → GameBall X} (h_valid : isValidPlay params fA B_seq) (n : ℕ) :
+    ∀ m ≥ 1, (B_seq (n + m)).toSet ⊆ (fA n (B_seq n)).A.toSet
+  | 1, _ => (play_nesting_step h_valid n).1
+  | m + 2, _ => by
+    have ih := play_subset_step h_valid n (m + 1) (by omega)
+    have step := (play_nesting_step h_valid (n + m + 1)).1
+    have step_sub := (play_nesting_step h_valid (n + m + 1)).2
+    exact step.trans (step_sub.trans ih)
+
+/-- Radius scaling across m elapsed physical game steps. -/
+lemma play_radius_step {params : SchmidtParams} {fA : AliceStrategy params}
+    {B_seq : ℕ → GameBall X} (h_valid : isValidPlay params fA B_seq) (n : ℕ) :
+    ∀ m ≥ 1, (B_seq (n + m)).radius =
+      (params.α ^ (m - 1) * params.β ^ m) * (fA n (B_seq n)).A.radius
+  | 1, _ => by
+    obtain ⟨moveB, hB⟩ := h_valid n
+    have h0 : 1 - 1 = 0 := rfl
+    rw [← hB, moveB.r_eq, h0, pow_zero, pow_one]
+    ring
+  | m + 2, _ => by
+    have ih := play_radius_step h_valid n (m + 1) (by omega)
+    obtain ⟨moveB, hB⟩ := h_valid (n + m + 1)
+    have hA_rad := (fA (n + m + 1) (B_seq (n + m + 1))).r_eq
+    have h_idx1 : n + (m + 2) = (n + m + 1) + 1 := by omega
+    have h_idx2 : n + m + 1 = n + (m + 1) := by omega
+    have h1 : m + 1 - 1 = m := by omega
+    have h2 : m + 2 - 1 = m + 1 := by omega
+    have h3 : m + 2 = m + 1 + 1 := by omega
+    rw [h_idx1, ← hB, moveB.r_eq, hA_rad, h_idx2, ih]
+    rw [h1, h2, h3, pow_succ params.α m, pow_succ params.β (m + 1)]
+    ring
+
+theorem countable_intersection_alpha [CompleteSpace X]
+    (α : ℝ) (hα_pos : 0 < α) (hα_lt : α < 1)
+    (S : ℕ → Set X) (h_win : ∀ i, IsAlphaWinning α hα_pos hα_lt (S i)) :
+    IsAlphaWinning α hα_pos hα_lt (⋂ i, S i) := by
+  intro β hβ_pos hβ_lt
+
+  let params : SchmidtParams := ⟨α, β, hα_pos, hα_lt, hβ_pos, hβ_lt⟩
+
+  let sub_params : ℕ → SchmidtParams := fun i => {
+    α := α
+    β := schmidtBeta α β i
+    hα_pos := hα_pos
+    hα_lt  := hα_lt
+    hβ_pos := schmidtBeta_pos hα_pos hβ_pos i
+    hβ_lt  := schmidtBeta_lt hα_pos hα_lt hβ_pos hβ_lt i
+  }
+
+  have hα_eq : ∀ i, (sub_params i).α = params.α := fun _ => rfl
+
+  have h_sub_win : ∀ i, IsWinningSet (sub_params i) (S i) := by
+    intro i
+    exact h_win i (schmidtBeta α β i)
+      (schmidtBeta_pos hα_pos hβ_pos i)
+      (schmidtBeta_lt hα_pos hα_lt hβ_pos hβ_lt i)
+
+  choose strats h_strats using h_sub_win
+
+  use interleavedStrategy params sub_params hα_eq strats
+  intro B_seq h_valid x hx
+
+  rw [Set.mem_iInter]
+  intro i
+
+  have h_sub_valid : isValidPlay (sub_params i) (strats i) (subBallSeq i B_seq) := by
+    intro k
+    let n := turnIdx i k
+    let m := 2^(i + 1)
+    have hm : 1 ≤ m := Nat.one_le_two_pow
+    have h_gap : turnIdx i (k + 1) = n + m := turnIdx_succ_gap i k
+    
+    -- Evaluate the interleaved strategy on turn n to recover sub-strategy i
+    have h_strat_eval :
+        (interleavedStrategy params sub_params hα_eq strats n (B_seq n)).A =
+        (strats i k (subBallSeq i B_seq k)).A := by
+      dsimp [interleavedStrategy, subBallSeq, n]
+      rw [turnToStrategy_turnIdx]
+
+    -- Step containment and radius scaling across m physical steps
+    have h_sub := play_subset_step h_valid n m hm
+    have h_rad := play_radius_step h_valid n m hm
+    rw [h_strat_eval] at h_sub h_rad
+
+    -- Package Bob's simulated move in sub-game i
+    let moveB : BobMove (sub_params i) (strats i k (subBallSeq i B_seq k)).A := {
+      B'   := subBallSeq i B_seq (k + 1)
+      sub  := by
+        dsimp [subBallSeq]
+        rw [h_gap]
+        exact h_sub
+      r_eq := by
+        dsimp [subBallSeq, sub_params, schmidtBeta]
+        rw [h_gap]
+        exact h_rad
+    }
+    exact ⟨moveB, rfl⟩
+
+  have h_x_in_sub : ∀ k, x ∈ (subBallSeq i B_seq k).toSet := by
+    intro k
+    exact hx (turnIdx i k)
+
+  exact h_strats i (subBallSeq i B_seq) h_sub_valid x h_x_in_sub
 
 /-- The set of all valid α values for which S is α-winning. -/
 def winningAlphas (S : Set X) : Set ℝ :=
