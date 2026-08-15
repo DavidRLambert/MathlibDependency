@@ -278,16 +278,18 @@ theorem schmidt_lemma_16 (g : ℕ) (hg : 2 < g) (a b : ℝ) (hab : a < b)
       have hac : a ≤ c := le_max_left a _
       have hnc : (n : ℝ) * period ≤ c := le_max_right a _
       have hc_le_b : c ≤ b - α * L :=
-        max_le (by linarith) (by linarith [h_min1, hn_le, hb_eq, h_gap_nonneg])
-      have hcb : c + α * L ≤ b := by linarith
+        max_le (by linarith only [ha_eq, hb_eq, h_alpha_L_le_L])
+               (by linarith only [h_min1, hn_le, hb_eq, h_gap_nonneg])
+      have hcb : c + α * L ≤ b := by linarith only [hc_le_b]
       have hc_le_w : c ≤ (n : ℝ) * period + w - α * L :=
-        max_le (by linarith [h_min1, h_case, ha_eq]) (by linarith [h_min2])
+        max_le (by linarith only [ha_eq, h_case, h_min1])
+               (by linarith only [h_min2])
       have h_sub : Set.Icc c (c + α * L) ⊆ I_int g k n := by
         unfold I_int
         rw [h_xn_period]
-        exact Set.Icc_subset_Icc hnc (by linarith)
+        exact Set.Icc_subset_Icc hnc (by linarith only [hc_le_w])
       exact ⟨n, c, hac, hcb, h_sub⟩
-    · have h_case2 : (n : ℝ) * period + w + (1 / 2) * gap < m := by linarith
+    · have h_case2 : (n : ℝ) * period + w + (1 / 2) * gap < m := not_le.mp h_case
       have hn1_period : ((n + 1 : ℤ) : ℝ) * period = (n : ℝ) * period + w + gap := by
         push_cast
         rw [← h_w_gap]
@@ -300,14 +302,16 @@ theorem schmidt_lemma_16 (g : ℕ) (hg : 2 < g) (a b : ℝ) (hab : a < b)
       have hac : a ≤ c := le_max_left a _
       have hnc : ((n + 1 : ℤ) : ℝ) * period ≤ c := le_max_right a _
       have hc_le_b : c ≤ b - α * L :=
-        max_le (by linarith) (by linarith [hn1_period, h_case2, hb_eq, h_min1])
-      have hcb : c + α * L ≤ b := by linarith
+        max_le (by linarith only [ha_eq, hb_eq, h_alpha_L_le_L])
+               (by linarith only [hn1_period, h_case2, hb_eq, h_min1])
+      have hcb : c + α * L ≤ b := by linarith only [hc_le_b]
       have hc_le_w : c ≤ ((n + 1 : ℤ) : ℝ) * period + w - α * L :=
-        max_le (by linarith [h_alpha_L_le_L, hL_pos, ha_eq, h_lt_n1', h_min2]) (by linarith [h_min2])
+        max_le (by linarith only [ha_eq, h_lt_n1', h_min2, hL_pos])
+               (by linarith only [h_min2])
       have h_sub : Set.Icc c (c + α * L) ⊆ I_int g k (n + 1) := by
         unfold I_int
         rw [hn1_period_div]
-        exact Set.Icc_subset_Icc hnc (by linarith)
+        exact Set.Icc_subset_Icc hnc (by linarith only [hc_le_w])
       exact ⟨n + 1, c, hac, hcb, h_sub⟩
 
   obtain ⟨n, c, hac, hdb, h_sub⟩ := h_overlap
@@ -354,12 +358,120 @@ def I_int_interior (g : ℕ) (k : ℕ) (n : ℤ) : Set ℝ :=
     ((n : ℝ) / (g : ℝ)^k) 
     ((n : ℝ) / (g : ℝ)^k + 1 / (((g : ℝ) - 1) * (g : ℝ)^k))
 
+lemma baseDigit_shift (g : ℕ) (k j : ℕ) (n : ℤ) (x y : ℝ) (hy : y = x * (g : ℝ)^k - (n : ℝ)) :
+    baseDigit g (k + j + 1) x = ⌊y * (g : ℝ)^(j + 1)⌋ - (g : ℤ) * ⌊y * (g : ℝ)^j⌋ := by
+  dsimp [baseDigit]
+  have h1 : x * (g : ℝ)^(k + j + 1) = ((n * (g : ℤ)^(j + 1) : ℤ) : ℝ) + y * (g : ℝ)^(j + 1) := by
+    have : (g : ℝ)^(k + j + 1) = (g : ℝ)^k * (g : ℝ)^(j + 1) := by
+      rw [show k + j + 1 = k + (j + 1) by omega, pow_add]
+    rw [this]
+    have : x * ((g : ℝ)^k * (g : ℝ)^(j + 1)) = (x * (g : ℝ)^k) * (g : ℝ)^(j + 1) := by ring
+    rw [this]
+    have hx : x * (g : ℝ)^k = (n : ℝ) + y := by linarith [hy]
+    rw [hx]
+    push_cast
+    ring
+  have h2 : x * (g : ℝ)^(k + j) = ((n * (g : ℤ)^j : ℤ) : ℝ) + y * (g : ℝ)^j := by
+    have : (g : ℝ)^(k + j) = (g : ℝ)^k * (g : ℝ)^j := by rw [pow_add]
+    rw [this]
+    have : x * ((g : ℝ)^k * (g : ℝ)^j) = (x * (g : ℝ)^k) * (g : ℝ)^j := by ring
+    rw [this]
+    have hx : x * (g : ℝ)^k = (n : ℝ) + y := by linarith [hy]
+    rw [hx]
+    push_cast
+    ring
+  rw [h1, h2]
+  rw [Int.floor_intCast_add, Int.floor_intCast_add]
+  rw [pow_succ (g : ℤ) j]
+  ring
+
+lemma geom_sum_floor_bound (g : ℕ) (hg : 2 < g) (y : ℝ) (hy0 : 0 ≤ y)
+    (h_pos : ∀ i : ℕ, 1 ≤ ⌊y * (g : ℝ)^(i + 1)⌋ - (g : ℤ) * ⌊y * (g : ℝ)^i⌋) :
+    ∀ j : ℕ, ((g : ℝ)^j - 1) / ((g : ℝ) - 1) ≤ (⌊y * (g : ℝ)^j⌋ : ℝ) := by
+  intro j
+  induction j with
+  | zero =>
+    simp only [pow_zero, sub_self, zero_div, mul_one]
+    exact_mod_cast (Int.floor_nonneg.mpr hy0)
+  | succ j ih =>
+    have h_step := h_pos j
+    have h_int_le : (g : ℤ) * ⌊y * (g : ℝ)^j⌋ + 1 ≤ ⌊y * (g : ℝ)^(j + 1)⌋ := by
+      linarith [h_step]
+    have h_cast : (g : ℝ) * (⌊y * (g : ℝ)^j⌋ : ℝ) + 1 ≤ (⌊y * (g : ℝ)^(j + 1)⌋ : ℝ) := by
+      exact_mod_cast h_int_le
+    have hgm1_pos : 0 < (g : ℝ) - 1 := g_minus_one_pos g hg
+    have h_geom : ((g : ℝ)^(j + 1) - 1) / ((g : ℝ) - 1) = (g : ℝ) * (((g : ℝ)^j - 1) / ((g : ℝ) - 1)) + 1 := by
+      have : (g : ℝ) - 1 ≠ 0 := ne_of_gt hgm1_pos
+      field_simp
+      ring
+    rw [h_geom]
+    have hg_nonneg : 0 ≤ (g : ℝ) := by positivity
+    nlinarith
+
 /-- Points strictly in the interior of I_k(n) must have at least one zero digit 
     at or beyond position k + 1. -/
 lemma zero_digit_of_mem_interior (g : ℕ) (hg : 2 < g) (k : ℕ) (n : ℤ) {x : ℝ}
     (hx : x ∈ I_int_interior g k n) :
     ∃ (m : ℕ), m ≥ k + 1 ∧ baseDigit g m x = 0 := by
-  sorry
+  dsimp [I_int_interior] at hx
+  set y := x * (g : ℝ)^k - (n : ℝ)
+  have hg_real : 2 < (g : ℝ) := g_real_gt_two g hg
+  have hgm1_pos : 0 < (g : ℝ) - 1 := g_minus_one_pos g hg
+  have hgk_pos : 0 < (g : ℝ)^k := by positivity
+  
+  have hy_pos : 0 < y := by
+    have h1 := hx.1
+    have : (n : ℝ) < x * (g : ℝ)^k := (div_lt_iff₀ hgk_pos).mp h1
+    linarith
+  have hy_ub : y < 1 / ((g : ℝ) - 1) := by
+    have h2 := hx.2
+    have h_mul : x * (g : ℝ)^k < (n : ℝ) + 1 / ((g : ℝ) - 1) := by
+      calc x * (g : ℝ)^k < ((n : ℝ) / (g : ℝ)^k + 1 / (((g : ℝ) - 1) * (g : ℝ)^k)) * (g : ℝ)^k := by
+            exact (mul_lt_mul_iff_of_pos_right hgk_pos).mpr h2
+      _ = (n : ℝ) + 1 / ((g : ℝ) - 1) := by
+            have : ((g : ℝ) - 1) * (g : ℝ)^k ≠ 0 := by positivity
+            have : (g : ℝ)^k ≠ 0 := by positivity
+            field_simp; 
+    linarith
+
+  by_contra! h_no_zero
+  have h_pos_digit : ∀ j : ℕ, 1 ≤ baseDigit g (k + j + 1) x := by
+    intro j
+    have h_ne := h_no_zero (k + j + 1) (by omega)
+    have : 0 ≤ baseDigit g (k + j + 1) x := by
+      dsimp [baseDigit]
+      have : 0 ≤ ⌊x * (g : ℝ)^(k + j + 1)⌋ - (g : ℤ) * ⌊x * (g : ℝ)^(k + j)⌋ := by
+        sorry -- Standard base-g floor nonnegativity
+      exact this
+    omega
+
+  have h_floor_bound : ∀ j : ℕ, ((g : ℝ)^j - 1) / ((g : ℝ) - 1) ≤ (⌊y * (g : ℝ)^j⌋ : ℝ) := by
+    apply geom_sum_floor_bound g hg y (le_of_lt hy_pos)
+    intro i
+    have h_sh := baseDigit_shift g k i n x y rfl
+    have h_dig := h_pos_digit i
+    rwa [h_sh] at h_dig
+
+  have h_bound : ∀ j : ℕ, ((g : ℝ)^j - 1) / ((g : ℝ) - 1) ≤ y * (g : ℝ)^j := by
+    intro j
+    exact le_trans (h_floor_bound j) (Int.floor_le _)
+
+  set δ := 1 / ((g : ℝ) - 1) - y
+  have hδ_pos : 0 < δ := sub_pos.mpr hy_ub
+  have h_tendsto : Filter.Tendsto (fun j : ℕ => δ * (g : ℝ)^j) Filter.atTop Filter.atTop :=
+    Filter.Tendsto.const_mul_atTop hδ_pos (tendsto_pow_atTop_atTop_of_one_lt (by linarith))
+  
+  obtain ⟨J, hJ⟩ := (Filter.tendsto_atTop_atTop.mp h_tendsto) (1 / ((g : ℝ) - 1) + 1)
+  have hJ_spec := hJ J (le_refl J)
+  have h_contra := h_bound J
+  
+  have : y * (g : ℝ)^J < ((g : ℝ)^J - 1) / ((g : ℝ) - 1) := by
+    have : ((g : ℝ)^J - 1) / ((g : ℝ) - 1) = (1 / ((g : ℝ) - 1)) * (g : ℝ)^J - 1 / ((g : ℝ) - 1) := by
+      field_simp;
+    rw [this]
+    dsimp [δ] at hJ_spec
+    linarith
+  linarith
 
 /-- Compact sub-intervals of the interior guarantee a zero digit within a bounded range. -/
 lemma zero_digit_of_compact_interior (g : ℕ) (hg : 2 < g) (k : ℕ) (n : ℤ) (c d : ℝ)
