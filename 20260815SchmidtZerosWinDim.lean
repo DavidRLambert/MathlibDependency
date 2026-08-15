@@ -193,10 +193,9 @@ lemma subinterval_in_Icc {c d a b : ℝ} (_hcd : c < d) (hac : a ≤ c) (hdb : d
   Set.Icc_subset_Icc hac hdb
 
 /-! 5. Proof of Lemma 16 -/
-
 theorem schmidt_lemma_16 (g : ℕ) (hg : 2 < g) (a b : ℝ) (hab : a < b)
     (h_len : b - a ≤ 1 / (alpha_g g * ((g : ℝ)^2 - (g : ℝ)))) :
-    ∃ (k : ℕ) (hk : 1 ≤ k) (c d : ℝ) (hcd : c < d),
+    ∃ (k : ℕ) (_hk : 1 ≤ k) (c d : ℝ) (_hcd : c < d),
       Set.Icc c d ⊆ Set.Icc a b ∧
       d - c = alpha_g g * (b - a) ∧
       Set.Icc c d ⊆ K g k := by
@@ -214,7 +213,6 @@ theorem schmidt_lemma_16 (g : ℕ) (hg : 2 < g) (a b : ℝ) (hab : a < b)
   set m := (a + b) / 2
   
   -- Symmetrized midpoint analysis:
-  -- Find integer n such that the chosen interval I_int g k n overlaps [a, b] by at least α * L
   have h_overlap : ∃ (n : ℤ) (c : ℝ),
       a ≤ c ∧ c + α * L ≤ b ∧ Set.Icc c (c + α * L) ⊆ I_int g k n := by
     -- Evaluate worst-case midpoint alignment
@@ -222,10 +220,105 @@ theorem schmidt_lemma_16 (g : ℕ) (hg : 2 < g) (a b : ℝ) (hab : a < b)
       apply le_min
       · -- (1/2)*L - (1/2)*gap - α*L ≥ 0 from equation (20) lower bound
         have h_id := half_sub_alpha_g g
-        sorry
+        have h_gap_eq : (1 / 2) * gap =
+            ((1 / 2) * (g : ℝ) * ((g : ℝ) - 2) * α) *
+            (1 / (α * ((g : ℝ) - 1) * (g : ℝ)^(k + 1))) := by
+          dsimp [gap, α]
+          have hg_ne : (g : ℝ) ≠ 0 := by positivity
+          have hgm1_ne : (g : ℝ) - 1 ≠ 0 := ne_of_gt (g_minus_one_pos g hg)
+          have hgk_ne : (g : ℝ)^k ≠ 0 := by positivity
+          have hα_ne : alpha_g g ≠ 0 := ne_of_gt (alpha_g_pos g)
+          have h_pow : (g : ℝ)^(k + 1) = (g : ℝ)^k * (g : ℝ) := by rw [pow_succ]
+          rw [h_pow]
+          field_simp
+        have h_factor_pos : 0 ≤ (1 / 2) * (g : ℝ) * ((g : ℝ) - 2) * α := by
+          have : 0 < (g : ℝ) - 2 := g_minus_two_pos g hg
+          positivity
+        have h_gap_le : (1 / 2) * gap ≤ ((1 / 2) * (g : ℝ) * ((g : ℝ) - 2) * α) * L := by
+          rw [h_gap_eq]
+          exact mul_le_mul_of_nonneg_left (le_of_lt h_lower) h_factor_pos
+        rw [ ← h_id] at h_gap_le
+        linarith
       · -- α*L ≤ w from equation (20) upper bound
-        sorry
-    sorry
+        have h_w_eq : 1 / (α * ((g : ℝ) - 1) * (g : ℝ)^k) = w / α := by
+          dsimp [w]
+          have hα_ne : α ≠ 0 := ne_of_gt hα_pos
+          have hgm1_ne : (g : ℝ) - 1 ≠ 0 := ne_of_gt (g_minus_one_pos g hg)
+          have hgk_ne : (g : ℝ)^k ≠ 0 := by positivity
+          field_simp
+        have h_bound : L ≤ w / α := by
+          rwa [h_w_eq] at h_upper
+        have h_mul := (le_div_iff₀ hα_pos).mp h_bound
+        linarith
+
+    have ⟨h_min1, h_min2⟩ := le_min_iff.mp h_min_bound
+    have h_period_pos : 0 < period := by
+      dsimp [period]
+      positivity
+    have h_gap_nonneg : 0 ≤ gap := by
+      dsimp [gap]
+      have : 0 < (g : ℝ) - 2 := g_minus_two_pos g hg
+      have : 0 < (g : ℝ) - 1 := g_minus_one_pos g hg
+      positivity
+    have h_w_gap : w + gap = period := by
+      dsimp [w, gap, period]
+      have hgm1_ne : (g : ℝ) - 1 ≠ 0 := ne_of_gt (g_minus_one_pos g hg)
+      have hgk_ne : (g : ℝ)^k ≠ 0 := by positivity
+      field_simp
+      ring
+    have ha_eq : a = m - (1 / 2) * L := by dsimp [m, L]; ring
+    have hb_eq : b = m + (1 / 2) * L := by dsimp [m, L]; ring
+    have h_alpha_L_le_L : α * L ≤ L := by
+      have : α < 1 := alpha_g_lt_one g hg
+      nlinarith
+
+    set y := m / period
+    set n := ⌊y⌋
+    have hn_le_y : (n : ℝ) ≤ y := Int.floor_le y
+    have hn_le : (n : ℝ) * period ≤ m := (le_div_iff₀ h_period_pos).mp hn_le_y
+    have hy_lt_n1 : y < (n : ℝ) + 1 := Int.lt_floor_add_one y
+    have h_lt_n1 : m < ((n : ℝ) + 1) * period := (div_lt_iff₀ h_period_pos).mp hy_lt_n1
+    have h_xn_period : (n : ℝ) / (g : ℝ)^k = (n : ℝ) * period := by
+      dsimp [period]; ring
+
+    by_cases h_case : m ≤ (n : ℝ) * period + w + (1 / 2) * gap
+    · -- Case 1: m is closer to interval n
+      set c := max a ((n : ℝ) * period)
+      have hac : a ≤ c := le_max_left a _
+      have hnc : (n : ℝ) * period ≤ c := le_max_right a _
+      have hc_le_b : c ≤ b - α * L :=
+        max_le (by linarith) (by linarith [h_min1, hn_le, hb_eq, h_gap_nonneg])
+      have hcb : c + α * L ≤ b := by linarith
+      have hc_le_w : c ≤ (n : ℝ) * period + w - α * L :=
+        max_le (by linarith [h_min1, h_case, ha_eq]) (by linarith [h_min2])
+      have h_sub : Set.Icc c (c + α * L) ⊆ I_int g k n := by
+        unfold I_int
+        rw [h_xn_period]
+        exact Set.Icc_subset_Icc hnc (by linarith)
+      exact ⟨n, c, hac, hcb, h_sub⟩
+    · -- Case 2: m is closer to interval n + 1
+      have h_case2 : (n : ℝ) * period + w + (1 / 2) * gap < m := by linarith
+      have hn1_period : ((n + 1 : ℤ) : ℝ) * period = (n : ℝ) * period + w + gap := by
+        push_cast
+        rw [← h_w_gap]
+        ring
+      have hn1_period_div : ((n + 1 : ℤ) : ℝ) / (g : ℝ)^k = ((n + 1 : ℤ) : ℝ) * period := by
+        dsimp [period]; ring
+      have h_lt_n1' : m < ((n + 1 : ℤ) : ℝ) * period := by
+        push_cast; exact h_lt_n1
+      set c := max a (((n + 1 : ℤ) : ℝ) * period)
+      have hac : a ≤ c := le_max_left a _
+      have hnc : ((n + 1 : ℤ) : ℝ) * period ≤ c := le_max_right a _
+      have hc_le_b : c ≤ b - α * L :=
+        max_le (by linarith) (by linarith [hn1_period, h_case2, hb_eq, h_min1])
+      have hcb : c + α * L ≤ b := by linarith
+      have hc_le_w : c ≤ ((n + 1 : ℤ) : ℝ) * period + w - α * L :=
+        max_le (by linarith [h_alpha_L_le_L, hL_pos, ha_eq, h_lt_n1', h_min2]) (by linarith [h_min2])
+      have h_sub : Set.Icc c (c + α * L) ⊆ I_int g k (n + 1) := by
+        unfold I_int
+        rw [hn1_period_div]
+        exact Set.Icc_subset_Icc hnc (by linarith)
+      exact ⟨n + 1, c, hac, hcb, h_sub⟩
 
   obtain ⟨n, c, hac, hdb, h_sub⟩ := h_overlap
   refine ⟨k, hk, c, c + α * L, ?_, ?_, ?_, ?_⟩
