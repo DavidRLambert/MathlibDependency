@@ -1,9 +1,4 @@
 import Mathlib
---import Mathlib.Topology.MetricSpace.Basic
---import Mathlib.Topology.Instances.Real
---import Mathlib.Tactic.Linarith
---import Mathlib.Tactic.Ring
-
 
 /-- Parameters for Schmidt's (α, β)-game on a metric space. -/
 structure SchmidtParams where
@@ -13,15 +8,6 @@ structure SchmidtParams where
   hα_lt  : α < 1
   hβ_pos : 0 < β
   hβ_lt  : β < 1
-
--- Example instantiation: α = 0.5, β = 0.5
-noncomputable def standardParams : SchmidtParams where
-  α := 1/2
-  β := 1/2
-  hα_pos := by norm_num
-  hα_lt  := by norm_num
-  hβ_pos := by norm_num
-  hβ_lt  := by norm_num
 
 variable {X : Type*} [MetricSpace X]
 
@@ -64,13 +50,6 @@ theorem alice_radius_lt (params : SchmidtParams) (B : GameBall X) (moveA : Alice
   nlinarith [params.hα_lt, B.r_pos]
 
 /-- Lemma 2: After one full round (Bob -> Alice -> Bob), the radius shrinks strictly. -/
---theorem round_radius_lt (params : SchmidtParams) (B : GameBall X)
---    (moveA : AliceMove params B) (moveB : BobMove params moveA.A) :
---    moveB.B'.radius < B.radius := by
---  -- Expand radius definitions: r(B') = β * (α * r(B))
---  rw [moveB.r_eq, moveA.r_eq]
---  -- Solve inequality given 0 < α < 1, 0 < β < 1, and r(B) > 0
---  nlinarith [params.hα_pos, params.hα_lt, params.hβ_pos, params.hβ_lt, B.r_pos]
 theorem round_radius_lt (params : SchmidtParams) (B : GameBall X)
     (moveA : AliceMove params B) (moveB : BobMove params moveA.A) :
     moveB.B'.radius < B.radius := by
@@ -118,23 +97,10 @@ structure NestedBallSeq (X : Type*) [MetricSpace X] where
   ball : ℕ → GameBall X
   nested : ∀ n, (ball (n + 1)).toSet ⊆ (ball n).toSet
   radii_tendsto : Filter.Tendsto (fun n => (ball n).radius) Filter.atTop (nhds 0)
+
 /-- Cantor's Intersection Theorem for closed balls:
     An infinite sequence of nested closed balls with vanishing radii
     has a UNIQUE point of intersection x*. -/
---theorem nested_balls_intersection_unique (seq : NestedBallSeq X) :
---    ∃! x : X, ∀ n : ℕ, x ∈ (seq.ball n).toSet := by
---  sorry
-  -- Proof strategy in Lean:
-  -- 1. Show the sequence of ball centers c_n is a Cauchy sequence.
-  -- 2. Use [CompleteSpace X] to get the limit point x*.
-  -- 3. Show x* is in every ball B_n (since balls are closed).
-  -- 4. Prove uniqueness using r_n -> 0.
--- Target set S is a subset of space X (e.g., Badly Approximable Numbers in ℝ). -/
-
--- (Assuming NestedBallSeq is defined as before)
-
---theorem nested_balls_intersection_unique (seq : NestedBallSeq X) :
---    ∃! x : X, ∀ n : ℕ, x ∈ (seq.ball n).toSet := by
 theorem nested_balls_intersection_unique [CompleteSpace X] (seq : NestedBallSeq X) :
     ∃! x : X, ∀ n : ℕ, x ∈ (seq.ball n).toSet := by
 
@@ -143,7 +109,6 @@ theorem nested_balls_intersection_unique [CompleteSpace X] (seq : NestedBallSeq 
   let r := fun n => (seq.ball n).radius
 
   -- STEP 2: Prove the sequence of centers is a Cauchy sequence
--- STEP 2: Prove the sequence of centers is a Cauchy sequence
   have hCauchy : CauchySeq c := by
     -- Use the alternative metric characterization for Cauchy sequences
     apply Metric.cauchySeq_iff'.mpr
@@ -176,13 +141,6 @@ theorem nested_balls_intersection_unique [CompleteSpace X] (seq : NestedBallSeq 
     -- From the radii limit, the distance from r_N to 0 is less than ε
     have h_limit_N : dist (r N) 0 < ε := hN N (le_refl N)
 
-    -- Convert the metric distance on ℝ to a strict inequality r_N < ε
---    have h_rN_lt_ε : r N < ε := by
---      calc
---        r N ≤ |r N| := le_abs_self (r N)
---        _ = norm(r N) := (Real.norm_eq_abs (r N)).symm
---        _ = dist (r N) 0 := (dist_zero_right (r N)).symm
---        _ < ε := h_limit_N
 -- Convert the metric distance on ℝ to a strict inequality r N < ε
     have h_rN_lt_ε : r N < ε := by
       calc
@@ -190,13 +148,6 @@ theorem nested_balls_intersection_unique [CompleteSpace X] (seq : NestedBallSeq 
         _ = |r N - 0| := by rw [sub_zero]
         _ = dist (r N) 0 := (Real.dist_eq (r N) 0).symm
         _ < ε := h_limit_N
-
-    -- Conclude that dist (c m) (c N) < ε by combining the bounds
---    rw [dist_comm]
---    exact lt_of_le_of_lt h_dist_centers h_rN_lt_ε
--- Flip the arguments of the distance function using symmetry
---    rw [dist_comm (c m) (c N)]
-    -- Chain the ≤ and < inequalities together
     exact lt_of_le_of_lt h_dist_centers h_rN_lt_ε
 
   -- STEP 3: Because X is a [CompleteSpace], we can extract the limit point x*
@@ -265,30 +216,17 @@ variable {X : Type*} [MetricSpace X]
 
 /-- A strategy for Alice is a function that provides a valid AliceMove
     for any possible ball B chosen by Bob. -/
---def AliceStrategy (params : SchmidtParams) :=
---  (B : GameBall X) → AliceMove params B-/
--- A strategy for Alice is a function that provides a valid AliceMove
---    for turn `n` and Bob's chosen ball `B`. -/
 def AliceStrategy (params : SchmidtParams) :=
   (n : ℕ) → (B : GameBall X) → AliceMove params B
--- A sequence of Bob's balls constitutes a valid play against Alice's strategy if
---    every subsequent ball B_{n+1} is a valid BobMove inside Alice's response to B_n. -/
---def isValidPlay {X : Type*} [MetricSpace X] (params : SchmidtParams) (fA : AliceStrategy (X := X) params)
---    (B_seq : ℕ → GameBall X) : Prop :=
---  ∀ n, ∃ (moveB : BobMove params (fA (B_seq n)).A), moveB.B' = B_seq (n + 1)
+
 /-- A sequence of Bob's balls constitutes a valid play against Alice's strategy if
     every subsequent ball B_{n+1} is a valid BobMove inside Alice's turn-n response to B_n. -/
 def isValidPlay {X : Type*} [MetricSpace X] (params : SchmidtParams) (fA : AliceStrategy (X := X) params)
     (B_seq : ℕ → GameBall X) : Prop :=
   ∀ n, ∃ (moveB : BobMove params (fA n (B_seq n)).A), moveB.B' = B_seq (n + 1)
+
 /-- Alice's strategy is winning if every valid sequence of plays against it
     results in the limit point being in the target set S. -/
---def isWinningStrategy {X : Type*} [MetricSpace X] (params : SchmidtParams) (S : Set X)
---    (fA : AliceStrategy (X := X) params) : Prop :=
---  ∀ (B_seq : ℕ → GameBall X),
---    isValidPlay params fA B_seq →
---    ∀ (x : X), (∀ n, x ∈ (B_seq n).toSet) → x ∈ S'/-- Alice's strategy is winning if every valid sequence of plays against it
---    results in the limit point being in the target set S. -/
 def isWinningStrategy {X : Type*} [MetricSpace X] (params : SchmidtParams) (S : Set X)
     (fA : AliceStrategy (X := X) params) : Prop :=
   ∀ (B_seq : ℕ → GameBall X),
@@ -352,54 +290,3 @@ noncomputable def valid_play_is_nested_seq {X : Type*} [MetricSpace X] (params :
     nested := h_nested
     radii_tendsto := h_radii_tendsto
   }
-
-  /-- Map a turn number n to (i, k), where i is the strategy index 
-    and k is the turn number for that strategy. -/
-def turnToStrategy (n : ℕ) : ℕ × ℕ :=
-  let m := n + 1
-  let i := padicValNat 2 m
-  let k := ((m / 2^i) - 1) / 2
-  (i, k)
-
-/-- Combine a countable sequence of Alice strategies into a single interleaved strategy. -/
-def interleavedStrategy {X : Type*} [MetricSpace X] (params : SchmidtParams)
-    (strats : ℕ → AliceStrategy (X := X) params) : AliceStrategy (X := X) params :=
-  fun n B =>
-    let (i, k) := turnToStrategy n
-    strats i k B
-
-    /-- Schmidt's Countable Intersection Theorem:
-    The intersection of countably many (α, β)-winning sets is also an (α, β)-winning set. -/
-theorem countable_intersection [CompleteSpace X] 
-    (params : SchmidtParams) (S : ℕ → Set X) 
-    (h_win : ∀ i, IsWinningSet params (S i)) :
-    IsWinningSet params (⋂ i, S i) := by
-  -- 1. Extract a winning strategy for each set S i
---  have strats : ℕ → AliceStrategy params := fun i => (h_win i).choose
---  have h_strats_win : ∀ i, isWinningStrategy params (S i) (strats i) := 
---    fun i => (h_win i).choose_spec
-  -- 1. Extract the sequence of strategies `strats` and their winning proofs `h_strats`
-  -- using Mathlib's `choose` tactic
-     choose strats h_strats using h_win
-
-  -- 2. Provide the interleaved strategy as Alice's winning strategy
-     use interleavedStrategy params strats
-
-  -- 3. Show that the interleaved strategy wins for ⋂ i, S i
-     intro B_seq h_valid x hx
-  
-  -- We need to prove x ∈ ⋂ i, S i, which means x ∈ S i for all i
-     rw [Set.mem_iInter]
-     intro i
-
-  -- Apply Alice's winning strategy property for set S i
-     have h_win_i := h_strats i
-
-  -- For strategy i, construct the simulated/projected play sequence against Bob
-  -- Since x is in every ball of the full game, x lies in the sub-sequence played for strategy i
-  --   exact h_win_i B_seq (by
-    -- Show that the full sequence preserves valid moves for individual turns
---     intro n
---     rcases h_valid n with ⟨moveB, hmoveB⟩
---     use moveB) x hx
-     sorry
