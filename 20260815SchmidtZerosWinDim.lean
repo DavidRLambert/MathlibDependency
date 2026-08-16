@@ -203,6 +203,43 @@ def isWinningStrategy {X : Type*} [MetricSpace X] (params : SchmidtParams) (S : 
 def IsWinningSet (params : SchmidtParams) (S : Set X) : Prop :=
   ∃ fA : AliceStrategy (X := X) params, isWinningStrategy params S fA
 
+-- A valid sequence of plays guarantees the creation of a NestedBallSeq. -
+/-- A valid sequence of plays guarantees the creation of a NestedBallSeq. -/
+noncomputable def valid_play_is_nested_seq {X : Type*} [MetricSpace X] (params : SchmidtParams) 
+    (fA : AliceStrategy params) (B_seq : ℕ → GameBall X) 
+    (h_valid : isValidPlay params fA B_seq) :
+    NestedBallSeq X where
+  ball := B_seq
+  nested := by
+    intro n
+    obtain ⟨moveB, hB_eq⟩ := h_valid n
+    rw [← hB_eq]
+    exact Set.Subset.trans moveB.sub (fA n (B_seq n)).sub
+  radii_tendsto := by
+    have h_radius_step : ∀ n, (B_seq (n + 1)).radius = (contractionParam params) * (B_seq n).radius := by
+      intro n
+      obtain ⟨moveB, hB_eq⟩ := h_valid n
+      calc
+        (B_seq (n + 1)).radius = moveB.B'.radius := by rw [← hB_eq]
+        _ = params.β * (fA n (B_seq n)).A.radius := moveB.r_eq
+        _ = params.β * (params.α * (B_seq n).radius) := by rw [(fA n (B_seq n)).r_eq]
+        _ = (params.α * params.β) * (B_seq n).radius := by ring
+        _ = contractionParam params * (B_seq n).radius := rfl
+    have h_radius_eq : ∀ n, (B_seq n).radius = (B_seq 0).radius * contractionParam params ^ n := by
+      intro n
+      induction n with
+      | zero => simp
+      | succ n ih =>
+        calc
+          (B_seq (n + 1)).radius = contractionParam params * (B_seq n).radius := h_radius_step n
+          _ = contractionParam params * ((B_seq 0).radius * contractionParam params ^ n) := by rw [ih]
+          _ = (B_seq 0).radius * contractionParam params ^ (n + 1) := by ring
+    have h_eq : (fun n => (B_seq n).radius) = (fun n => (B_seq 0).radius * contractionParam params ^ n) := by
+      ext n
+      exact h_radius_eq n
+    rw [h_eq]
+    exact radius_sequence_tendsto_zero params ((B_seq 0).radius)
+
 def IsAlphaWinning (α : ℝ) (hα_pos : 0 < α) (hα_lt : α < 1) (S : Set X) : Prop :=
   ∀ (β : ℝ) (hβ_pos : 0 < β) (hβ_lt : β < 1),
     IsWinningSet ⟨α, β, hα_pos, hα_lt, hβ_pos, hβ_lt⟩ S
@@ -1006,10 +1043,73 @@ noncomputable def aliceStrategy (g : ℕ) (hg : 2 < g) (params : SchmidtParams)
 
 /-! 8. Theorem 5: S_g Winning Strategy & Winning Dimension -/
 
+lemma S_g_eq_iInter (g : ℕ) : 
+    S_g g = ⋂ N : ℕ, { x : ℝ | ∃ k : ℕ, k ≥ N ∧ baseDigit g k x = 0 } := by
+  ext x
+  simp only [S_g, Set.mem_ofPred_eq, Set.mem_iInter]
+
+/-- Alice can win the single-zero target at scale ≥ N. -/
+lemma alice_wins_single_zero (g : ℕ) (hg : 2 < g) (N : ℕ) :
+    IsAlphaWinning (alpha_g g) (alpha_g_pos g) (alpha_g_lt_one g hg)
+      { x : ℝ | ∃ k : ℕ, k ≥ N ∧ baseDigit g k x = 0 } := by
+  intro β hβ_pos hβ_lt
+  let params : SchmidtParams := ⟨alpha_g g, β, alpha_g_pos g, alpha_g_lt_one g hg, hβ_pos, hβ_lt⟩
+  
+  -- Threshold radius to guarantee k ≥ N from exists_k_scale
+  set threshold := 1 / (alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^(N + 1))
+  
+  -- Alice plays concentric dummy moves until radius ≤ threshold, 
+  -- then executes Lemma 16 on turn n0, shrinks to interior on n0+1, and plays dummy moves thereafter.
+  have h_win : IsWinningSet params { x : ℝ | ∃ k : ℕ, k ≥ N ∧ baseDigit g k x = 0 } := by
+    -- Alice's strategy:
+    use aliceStrategy g hg params rfl
+    intro B_seq h_valid x hx
+    
+    -- Radii decay to 0, so 2 * B_n.radius eventually falls below threshold
+    have h_nested := valid_play_is_nested_seq params (aliceStrategy g hg params rfl) B_seq h_valid
+    have h_tendsto := h_nested.radii_tendsto
+    have h_thresh_pos : 0 < threshold := by
+      dsimp [threshold]
+      have : 0 < alpha_g g := alpha_g_pos g
+      have : 0 < (g : ℝ) - 1 := g_minus_one_pos g hg
+      have : 0 < (g : ℝ) := by linarith [g_real_gt_two g hg]
+      positivity
+    obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.mp 
+      (h_tendsto (isOpen_Iio.mem_nhds h_thresh_pos))
+    
+    -- At step n₀, Bob's ball satisfies the condition of lemma 16
+    have h_r_le : 2 * (B_seq (n₀ + 1)).radius ≤ 1 / (alpha_g g * ((g : ℝ)^2 - (g : ℝ))) := by
+      sorry -- Immediate bound from hn₀ (n₀ + 1) and threshold ≤ 1/(α_g * (g²-g))
+      
+    obtain ⟨k, hk, A_move, hA_sub, hA_rad, hA_K⟩ := 
+      alice_move_from_lemma_16 g hg params rfl (B_seq (n₀ + 1)) h_r_le
+      
+    -- Since x ∈ B_{n₀+2} ⊆ A_move ⊆ K(g, k), x belongs to some I_int(g, k, n)
+    have hx_K : x ∈ K g k := by
+      have hx_in_B : x ∈ (B_seq (n₀ + 2)).toSet := hx (n₀ + 2)
+      obtain ⟨moveB, hB_eq⟩ := h_valid (n₀ + 1)
+      have hx_in_A : x ∈ (aliceStrategy g hg params rfl (n₀ + 1) (B_seq (n₀ + 1))).A.toSet := by
+        rw [← hB_eq] at hx_in_B
+        exact moveB.sub hx_in_B
+      sorry -- Follows from choice of A_move in aliceStrategy and hA_K
+
+    obtain ⟨n, hn_int⟩ : ∃ n : ℤ, x ∈ I_int g k n := by
+      dsimp [K] at hx_K
+      exact Set.mem_iUnion.mp hx_K
+
+    -- By digit forcing, interior points have a zero digit at index m ≥ k + 1 ≥ N
+    have hk_ge_N : k ≥ N := by sorry -- Follows from radius ≤ threshold
+    obtain ⟨m, hm_ge, hm_zero⟩ := zero_digit_of_mem_interior g hg k n sorry
+    refine ⟨m, by omega, hm_zero⟩
+
+  exact h_win
+
 theorem schmidt_theorem_5_winning (g : ℕ) (hg : 2 < g) :
     IsAlphaWinning (alpha_g g) (alpha_g_pos g) (alpha_g_lt_one g hg) (S_g g) := by
-  intro β hβ_pos hβ_lt
-  sorry
+  rw [S_g_eq_iInter]
+  exact countable_intersection_alpha (alpha_g g) (alpha_g_pos g) (alpha_g_lt_one g hg)
+    (fun N => { x : ℝ | ∃ k : ℕ, k ≥ N ∧ baseDigit g k x = 0 })
+    (fun N => alice_wins_single_zero g hg N)
 
 lemma exists_m_schmidt_bound (g : ℕ) (hg : 2 < g) (α : ℝ) (hα_gt : alpha_g g < α) :
     ∃ m : ℕ, 3 ≤ m ∧ α > (1 + 2 * ((g : ℝ) - 1) * (g : ℝ)^(3 - (m : ℤ))) * alpha_g g := by
@@ -1055,7 +1155,47 @@ theorem schmidt_theorem_5_losing (g : ℕ) (hg : 2 < g) (α : ℝ) (hα_gt : alp
     (hα_lt : α < 1) :
     ¬ IsAlphaWinning α (by linarith [alpha_g_pos g]) hα_lt (S_g g) := by
   intro h_win
-  sorry
+  -- Step 1: Obtain m ≥ 3 from the gap-spacing condition
+  obtain ⟨m, hm_ge, hm_bound⟩ := exists_m_schmidt_bound g hg α hα_gt
+  
+  -- Step 2: Define Bob's counter parameter β = α⁻¹ * g⁻ᵐ
+  set β := (1 / α) * (g : ℝ)^(-(m : ℤ))
+  have hβ_pos : 0 < β := by
+    dsimp [β]
+    have : 0 < α := lt_trans (alpha_g_pos g) hα_gt
+    have : 0 < (g : ℝ) := by linarith [g_real_gt_two g hg]
+    positivity
+  have hα_pos : 0 < α := lt_trans (alpha_g_pos g) hα_gt
+  have hβ_lt : β < 1 := by
+    dsimp [β]
+    have h_pow_lt : (g : ℝ)^(-(m : ℤ)) < α := by
+      sorry -- Arithmetic consequence of hm_bound and α > α_g
+    have h_div_eq : (1 / α) * (g : ℝ)^(-(m : ℤ)) = (g : ℝ)^(-(m : ℤ)) / α := by ring
+    rw [h_div_eq]
+    exact (div_lt_one₀ hα_pos).mpr h_pow_lt
+    
+  -- Step 3: Extract Alice's claimed winning strategy against β
+  obtain ⟨fA, h_winning⟩ := h_win β hβ_pos hβ_lt
+  
+  -- Step 4: Bob plays balls B_n avoiding digit 0 in each m-block
+  have h_bob_seq : ∃ (B_seq : ℕ → GameBall ℝ),
+      isValidPlay ⟨α, β, by linarith [alpha_g_pos g], hα_lt, hβ_pos, hβ_lt⟩ fA B_seq ∧
+      (∃ N₀ : ℕ, ∀ (x : ℝ), (∀ n, x ∈ (B_seq n).toSet) → ∀ k ≥ N₀, baseDigit g k x ≠ 0) := by
+    sorry -- Inductive selection of center avoiding 0-digit intervals
+
+  obtain ⟨B_seq, h_play, N₀, h_no_zeros⟩ := h_bob_seq
+  
+-- Step 5: Extract the limit point x* via Cantor's Intersection Theorem
+  let params : SchmidtParams := ⟨α, β, by linarith [alpha_g_pos g], hα_lt, hβ_pos, hβ_lt⟩
+  obtain ⟨x_star, hx_star_in, -⟩ :=
+    nested_balls_intersection_unique (valid_play_is_nested_seq params fA B_seq h_play)
+
+  -- Step 6: Derive contradiction
+  have h_in_S : x_star ∈ S_g g := h_winning B_seq h_play x_star hx_star_in
+  dsimp [S_g] at h_in_S
+  obtain ⟨k, hk_ge, hk_zero⟩ := h_in_S N₀
+  have h_contra := h_no_zeros x_star hx_star_in k hk_ge
+  exact h_contra hk_zero
 
 /-- Full Theorem 5: The winning dimension of S_g equals α_g = ((g - 1)² + 1)⁻¹. -/
 theorem schmidt_theorem_5_windim (g : ℕ) (hg : 2 < g) :
