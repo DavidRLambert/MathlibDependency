@@ -568,10 +568,11 @@ lemma I_int_subset_K (g : ℕ) (k : ℕ) (n : ℤ) :
 
 theorem schmidt_lemma_16 (g : ℕ) (hg : 2 < g) (a b : ℝ) (hab : a < b)
     (h_len : b - a ≤ 1 / (alpha_g g * ((g : ℝ)^2 - (g : ℝ)))) :
-    ∃ (k : ℕ) (_hk : 1 ≤ k) (c d : ℝ) (_hcd : c < d),
+    ∃ (k : ℕ) (_hk : 1 ≤ k) (n : ℤ) (c d : ℝ) (_hcd : c < d),
+      1 / (alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^(k + 1)) < b - a ∧
       Set.Icc c d ⊆ Set.Icc a b ∧
       d - c = alpha_g g * (b - a) ∧
-      Set.Icc c d ⊆ K g k := by
+      Set.Icc c d ⊆ I_int g k n := by
   set L := b - a
   have hL_pos : 0 < L := sub_pos.mpr hab
   obtain ⟨k, hk, h_lower, h_upper⟩ := exists_k_scale g hg L hL_pos h_len
@@ -688,11 +689,10 @@ theorem schmidt_lemma_16 (g : ℕ) (hg : 2 < g) (a b : ℝ) (hab : a < b)
       exact ⟨n + 1, c, hac, hcb, h_sub⟩
 
   obtain ⟨n, c, hac, hdb, h_sub⟩ := h_overlap
-  refine ⟨k, hk, c, c + α * L, ?_, ?_, ?_, ?_⟩
+  refine ⟨k, hk, n, c, c + α * L, ?_, h_lower, ?_, ?_, h_sub⟩
   · linarith [mul_pos hα_pos hL_pos]
   · exact Set.Icc_subset_Icc hac hdb
   · ring
-  · exact Set.Subset.trans h_sub (I_int_subset_K g k n)
 
 /-! 5. Geometric Bridge: GameBall ℝ to Closed Intervals -/
 
@@ -963,13 +963,17 @@ lemma zero_digit_of_compact_interior (g : ℕ) (hg : 2 < g) (k : ℕ) (n : ℤ) 
 
 /-- Given Bob's ball B of sufficiently small radius, Alice can choose a sub-ball A ⊆ B 
     of radius α_g * r(B) entirely contained in K_k. -/
-lemma alice_move_from_lemma_16 (g : ℕ) (hg : 2 < g) (params : SchmidtParams)
+structure AliceMove16 (params : SchmidtParams) (g : ℕ) (B : GameBall ℝ) extends AliceMove params B where
+  k : ℕ
+  hk : 1 ≤ k
+  n : ℤ
+  h_scale : 1 / (alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^(k + 1)) < 2 * B.radius
+  h_int : toAliceMove.A.toSet ⊆ I_int g k n
+
+lemma alice_move_16_nonempty (g : ℕ) (hg : 2 < g) (params : SchmidtParams)
     (hα_eq : params.α = alpha_g g) (B : GameBall ℝ)
     (hB_radius : 2 * B.radius ≤ 1 / (alpha_g g * ((g : ℝ)^2 - (g : ℝ)))) :
-    ∃ (k : ℕ) (_hk : 1 ≤ k) (A : GameBall ℝ),
-      A.toSet ⊆ B.toSet ∧
-      A.radius = params.α * B.radius ∧
-      A.toSet ⊆ K g k := by
+    Nonempty (AliceMove16 params g B) := by
   set a := B.center - B.radius
   set b := B.center + B.radius
   have hab : a < b := by
@@ -978,18 +982,50 @@ lemma alice_move_from_lemma_16 (g : ℕ) (hg : 2 < g) (params : SchmidtParams)
   have h_len : b - a ≤ 1 / (alpha_g g * ((g : ℝ)^2 - (g : ℝ))) := by
     rw [gameBall_length]
     exact hB_radius
-  obtain ⟨k, hk, c, d, hcd, h_sub, h_len_eq, h_K⟩ := schmidt_lemma_16 g hg a b hab h_len
+  obtain ⟨k, hk, n, c, d, hcd, h_scale, h_sub, h_len_eq, h_int⟩ := schmidt_lemma_16 g hg a b hab h_len
   have h_rad : (d - c) / 2 = params.α * B.radius := by
     rw [h_len_eq, hα_eq, gameBall_length]
     ring
   set A := gameBallOfIcc c d hcd
-  refine ⟨k, hk, A, ?_, ?_, ?_⟩
-  · rw [gameBallOfIcc_toSet, gameBall_toSet_real]
+  have h_sub' : IsSubBall A B := by
+    dsimp [IsSubBall]
+    rw [gameBallOfIcc_toSet, gameBall_toSet_real]
     exact h_sub
-  · dsimp [A, gameBallOfIcc]
+  have h_r_eq : A.radius = params.α * B.radius := by
+    dsimp [A, gameBallOfIcc]
     exact h_rad
-  · rw [gameBallOfIcc_toSet]
-    exact h_K
+  have h_scale' : 1 / (alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^(k + 1)) < 2 * B.radius := by
+    rwa [gameBall_length] at h_scale
+  have h_int' : A.toSet ⊆ I_int g k n := by
+    rw [gameBallOfIcc_toSet]
+    exact h_int
+  exact ⟨⟨⟨A, h_sub', h_r_eq⟩, k, hk, n, h_scale', h_int'⟩⟩
+
+noncomputable def aliceChoice16 (g : ℕ) (hg : 2 < g) (params : SchmidtParams)
+    (hα_eq : params.α = alpha_g g) (B : GameBall ℝ)
+    (h : 2 * B.radius ≤ 1 / (alpha_g g * ((g : ℝ)^2 - (g : ℝ)))) :
+    AliceMove16 params g B :=
+  Classical.choice (alice_move_16_nonempty g hg params hα_eq B h)
+
+noncomputable def aliceStrategy (g : ℕ) (hg : 2 < g) (params : SchmidtParams)
+    (hα_eq : params.α = alpha_g g) : AliceStrategy (X := ℝ) params := fun _n B =>
+  if h : 2 * B.radius ≤ 1 / (alpha_g g * ((g : ℝ)^2 - (g : ℝ))) then
+    (aliceChoice16 g hg params hα_eq B h).toAliceMove
+  else
+    ⟨⟨B.center, params.α * B.radius, mul_pos params.hα_pos B.r_pos⟩, by
+      dsimp [IsSubBall]
+      rw [gameBall_toSet_real, gameBall_toSet_real]
+      intro x ⟨h1, h2⟩
+      have : params.α < 1 := by rw [hα_eq]; exact alpha_g_lt_one g hg
+      constructor <;> nlinarith [B.r_pos, params.hα_pos],
+    rfl⟩
+
+lemma aliceStrategy_eq_16 (g : ℕ) (hg : 2 < g) (params : SchmidtParams)
+    (hα_eq : params.α = alpha_g g) (n : ℕ) (B : GameBall ℝ)
+    (h : 2 * B.radius ≤ 1 / (alpha_g g * ((g : ℝ)^2 - (g : ℝ)))) :
+    aliceStrategy g hg params hα_eq n B = (aliceChoice16 g hg params hα_eq B h).toAliceMove := by
+  dsimp [aliceStrategy]
+  rw [dite_eq_left h]
 
 /-- Given an interval J ⊆ I_k(n), concentric scaling by α_g shrinks it 
     strictly into the open interior I_int_interior g k n. -/
@@ -1026,23 +1062,7 @@ lemma alice_shrink_to_interior (g : ℕ) (hg : 2 < g) (k : ℕ) (n : ℤ) (B : G
     intro x ⟨hxa, hxb⟩
     constructor <;> linarith
 
-noncomputable def aliceStrategy (g : ℕ) (hg : 2 < g) (params : SchmidtParams)
-    (hα_eq : params.α = alpha_g g) : AliceStrategy (X := ℝ) params := by
-  intro _n B
-  by_cases h : 2 * B.radius ≤ 1 / (alpha_g g * ((g : ℝ)^2 - (g : ℝ)))
-  · have h_move : ∃ A : GameBall ℝ, IsSubBall A B ∧ A.radius = params.α * B.radius := by
-      obtain ⟨_k, _hk, A, hsub, hr, _⟩ := alice_move_from_lemma_16 g hg params hα_eq B h
-      exact ⟨A, hsub, hr⟩
-    exact ⟨Classical.choose h_move, (Classical.choose_spec h_move).1, (Classical.choose_spec h_move).2⟩
-  · refine ⟨⟨B.center, params.α * B.radius, mul_pos params.hα_pos B.r_pos⟩, ?_, rfl⟩
-    dsimp [IsSubBall]
-    rw [gameBall_toSet_real, gameBall_toSet_real]
-    intro x ⟨h1, h2⟩
-    have : params.α < 1 := by rw [hα_eq]; exact alpha_g_lt_one g hg
-    constructor <;> nlinarith [B.r_pos, params.hα_pos]
-
 /-! 8. Theorem 5: S_g Winning Strategy & Winning Dimension -/
-
 lemma S_g_eq_iInter (g : ℕ) : 
     S_g g = ⋂ N : ℕ, { x : ℝ | ∃ k : ℕ, k ≥ N ∧ baseDigit g k x = 0 } := by
   ext x
@@ -1055,52 +1075,121 @@ lemma alice_wins_single_zero (g : ℕ) (hg : 2 < g) (N : ℕ) :
   intro β hβ_pos hβ_lt
   let params : SchmidtParams := ⟨alpha_g g, β, alpha_g_pos g, alpha_g_lt_one g hg, hβ_pos, hβ_lt⟩
   
-  -- Threshold radius to guarantee k ≥ N from exists_k_scale
-  set threshold := 1 / (alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^(N + 1))
-  
-  -- Alice plays concentric dummy moves until radius ≤ threshold, 
-  -- then executes Lemma 16 on turn n0, shrinks to interior on n0+1, and plays dummy moves thereafter.
   have h_win : IsWinningSet params { x : ℝ | ∃ k : ℕ, k ≥ N ∧ baseDigit g k x = 0 } := by
-    -- Alice's strategy:
     use aliceStrategy g hg params rfl
     intro B_seq h_valid x hx
     
-    -- Radii decay to 0, so 2 * B_n.radius eventually falls below threshold
-    have h_nested := valid_play_is_nested_seq params (aliceStrategy g hg params rfl) B_seq h_valid
-    have h_tendsto := h_nested.radii_tendsto
+    set threshold := (1 / 2) * (1 / (alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^(N + 1)))
+
     have h_thresh_pos : 0 < threshold := by
       dsimp [threshold]
       have : 0 < alpha_g g := alpha_g_pos g
       have : 0 < (g : ℝ) - 1 := g_minus_one_pos g hg
       have : 0 < (g : ℝ) := by linarith [g_real_gt_two g hg]
       positivity
+    
+    let h_nested := valid_play_is_nested_seq params (aliceStrategy g hg params rfl) B_seq h_valid
+    have h_tendsto := h_nested.radii_tendsto
     obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.mp 
       (h_tendsto (isOpen_Iio.mem_nhds h_thresh_pos))
     
-    -- At step n₀, Bob's ball satisfies the condition of lemma 16
     have h_r_le : 2 * (B_seq (n₀ + 1)).radius ≤ 1 / (alpha_g g * ((g : ℝ)^2 - (g : ℝ))) := by
-      sorry -- Immediate bound from hn₀ (n₀ + 1) and threshold ≤ 1/(α_g * (g²-g))
-      
-    obtain ⟨k, hk, A_move, hA_sub, hA_rad, hA_K⟩ := 
-      alice_move_from_lemma_16 g hg params rfl (B_seq (n₀ + 1)) h_r_le
-      
-    -- Since x ∈ B_{n₀+2} ⊆ A_move ⊆ K(g, k), x belongs to some I_int(g, k, n)
-    have hx_K : x ∈ K g k := by
-      have hx_in_B : x ∈ (B_seq (n₀ + 2)).toSet := hx (n₀ + 2)
-      obtain ⟨moveB, hB_eq⟩ := h_valid (n₀ + 1)
-      have hx_in_A : x ∈ (aliceStrategy g hg params rfl (n₀ + 1) (B_seq (n₀ + 1))).A.toSet := by
-        rw [← hB_eq] at hx_in_B
-        exact moveB.sub hx_in_B
-      sorry -- Follows from choice of A_move in aliceStrategy and hA_K
+      have hn₀_spec : (B_seq (n₀ + 1)).radius < threshold := hn₀ (n₀ + 1) (by omega)
+      have hg_gt1 : 1 < (g : ℝ) := by
+        have := g_real_gt_two g hg; linarith
+      have h_pow_le : (g : ℝ)^1 ≤ (g : ℝ)^(N + 1) :=
+        pow_le_pow_right₀ (by linarith) (by omega)
+      have h_denom_pos1 : 0 < alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^1 := by
+        have : 0 < alpha_g g := alpha_g_pos g
+        have : 0 < (g : ℝ) - 1 := g_minus_one_pos g hg
+        positivity
+      have h_denom_pos2 : 0 < alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^(N + 1) := by
+        have : 0 < alpha_g g := alpha_g_pos g
+        have : 0 < (g : ℝ) - 1 := g_minus_one_pos g hg
+        positivity
+      have h_inv_le : 1 / (alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^(N + 1)) ≤
+          1 / (alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^1) := by
+        rw [div_le_div_iff₀ h_denom_pos2 h_denom_pos1]
+        have h_coeff : 0 ≤ alpha_g g * ((g : ℝ) - 1) := by
+          have : 0 < alpha_g g := alpha_g_pos g
+          have : 0 < (g : ℝ) - 1 := g_minus_one_pos g hg
+          positivity
+        nlinarith [mul_le_mul_of_nonneg_left h_pow_le h_coeff]
+      have h_scale1 : alpha_g g * ((g : ℝ)^2 - (g : ℝ)) = alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^1 := by ring
+      have h_inv_eq : 1 / (alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^1) = 1 / (alpha_g g * ((g : ℝ)^2 - (g : ℝ))) := by
+        rw [h_scale1]
+      have h_2thresh : 2 * threshold = 1 / (alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^(N + 1)) := by
+        dsimp [threshold]; ring
+      calc
+        2 * (B_seq (n₀ + 1)).radius ≤ 2 * threshold := by linarith [hn₀_spec]
+        _ = 1 / (alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^(N + 1)) := h_2thresh
+        _ ≤ 1 / (alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^1) := h_inv_le
+        _ = 1 / (alpha_g g * ((g : ℝ)^2 - (g : ℝ))) := h_inv_eq
 
-    obtain ⟨n, hn_int⟩ : ∃ n : ℤ, x ∈ I_int g k n := by
-      dsimp [K] at hx_K
-      exact Set.mem_iUnion.mp hx_K
+    set move := aliceChoice16 g hg params rfl (B_seq (n₀ + 1)) h_r_le
+    have h_strat_eq : (aliceStrategy g hg params rfl (n₀ + 1) (B_seq (n₀ + 1))).A = move.A := by
+      rw [aliceStrategy_eq_16 g hg params rfl (n₀ + 1) (B_seq (n₀ + 1)) h_r_le]
 
-    -- By digit forcing, interior points have a zero digit at index m ≥ k + 1 ≥ N
-    have hk_ge_N : k ≥ N := by sorry -- Follows from radius ≤ threshold
-    obtain ⟨m, hm_ge, hm_zero⟩ := zero_digit_of_mem_interior g hg k n sorry
-    refine ⟨m, by omega, hm_zero⟩
+    have hk_ge_N : move.k ≥ N := by
+      by_contra! h_lt
+      have hn₀_spec : (B_seq (n₀ + 1)).radius < threshold := hn₀ (n₀ + 1) (by omega)
+      have h_2rad_lt : 2 * (B_seq (n₀ + 1)).radius < 1 / (alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^(N + 1)) := by
+        dsimp [threshold] at hn₀_spec
+        linarith
+      have h_trans : 1 / (alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^(move.k + 1)) <
+          1 / (alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^(N + 1)) :=
+        lt_trans move.h_scale h_2rad_lt
+      have h_denom_pos1 : 0 < alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^(move.k + 1) := by
+        have : 0 < alpha_g g := alpha_g_pos g
+        have : 0 < (g : ℝ) - 1 := g_minus_one_pos g hg
+        positivity
+      have h_denom_pos2 : 0 < alpha_g g * ((g : ℝ) - 1) * (g : ℝ)^(N + 1) := by
+        have : 0 < alpha_g g := alpha_g_pos g
+        have : 0 < (g : ℝ) - 1 := g_minus_one_pos g hg
+        positivity
+      rw [div_lt_div_iff₀ h_denom_pos1 h_denom_pos2] at h_trans
+      have h_pow_le : (g : ℝ)^(move.k + 1) ≤ (g : ℝ)^(N + 1) :=
+        pow_le_pow_right₀ (by linarith [g_real_gt_two g hg]) (by omega)
+      have h_coeff : 0 < alpha_g g * ((g : ℝ) - 1) := by
+        have : 0 < alpha_g g := alpha_g_pos g
+        have : 0 < (g : ℝ) - 1 := g_minus_one_pos g hg
+        positivity
+      nlinarith [h_trans, h_pow_le, h_coeff]
+
+    have hB3_sub_I : (B_seq (n₀ + 3)).toSet ⊆ I_int g move.k move.n := by
+      have h_sub_3_2 : (B_seq (n₀ + 3)).toSet ⊆ (B_seq (n₀ + 2)).toSet :=
+        ((play_nesting_step h_valid (n₀ + 2)).1).trans ((play_nesting_step h_valid (n₀ + 2)).2)
+      have h_sub_2_A1 : (B_seq (n₀ + 2)).toSet ⊆ move.A.toSet := by
+        have h_step := (play_nesting_step h_valid (n₀ + 1)).1
+        rwa [h_strat_eq] at h_step
+      exact (h_sub_3_2.trans h_sub_2_A1).trans move.h_int
+
+    have hx_in_I : x ∈ I_int g move.k move.n := by
+      have hx_in_B3 : x ∈ (B_seq (n₀ + 3)).toSet := hx (n₀ + 3)
+      exact hB3_sub_I hx_in_B3
+
+    dsimp [I_int] at hx_in_I
+
+    by_cases h_left_eq : x = (move.n : ℝ) / (g : ℝ)^move.k
+    · refine ⟨move.k + 1, by omega, ?_⟩
+      have hy : (0 : ℝ) = x * (g : ℝ)^move.k - (move.n : ℝ) := by
+        rw [h_left_eq]
+        have hgk_ne : (g : ℝ)^move.k ≠ 0 := by positivity
+        rw [div_mul_cancel₀ (move.n : ℝ) hgk_ne, sub_self]
+      have h_shift := baseDigit_shift g move.k 0 move.n x 0 hy
+      have h_add : move.k + 0 + 1 = move.k + 1 := by omega
+      rw [h_add] at h_shift
+      rw [h_shift]
+      simp
+    · by_cases h_right_eq : x = (move.n : ℝ) / (g : ℝ)^move.k + 1 / (((g : ℝ) - 1) * (g : ℝ)^move.k)
+      · -- Right boundary case: x = n/g^k + 1/((g-1)g^k)
+        sorry
+      · have hx_interior : x ∈ I_int_interior g move.k move.n := by
+          dsimp [I_int_interior]
+          exact ⟨lt_of_le_of_ne hx_in_I.1 (Ne.symm h_left_eq), lt_of_le_of_ne hx_in_I.2 h_right_eq⟩
+
+        obtain ⟨m, hm_ge, hm_zero⟩ := zero_digit_of_mem_interior g hg move.k move.n hx_interior
+        refine ⟨m, by omega, hm_zero⟩
 
   exact h_win
 
@@ -1169,7 +1258,21 @@ theorem schmidt_theorem_5_losing (g : ℕ) (hg : 2 < g) (α : ℝ) (hα_gt : alp
   have hβ_lt : β < 1 := by
     dsimp [β]
     have h_pow_lt : (g : ℝ)^(-(m : ℤ)) < α := by
-      sorry -- Arithmetic consequence of hm_bound and α > α_g
+      have hg3 : 3 ≤ (g : ℝ) := by exact_mod_cast (show 3 ≤ g by omega)
+      have hg_pos : 0 < (g : ℝ) := by linarith [g_real_gt_two g hg]
+      have h_zpow_eq : (g : ℝ)^(-(m : ℤ)) = 1 / (g : ℝ)^m := by
+        simp only [zpow_neg, zpow_natCast, one_div]
+      have h_pow_le : (g : ℝ)^3 ≤ (g : ℝ)^m :=
+        pow_le_pow_right₀ (by linarith) hm_ge
+      have h_recip_le : 1 / (g : ℝ)^m ≤ 1 / (g : ℝ)^3 := by
+        rw [div_le_div_iff₀ (by positivity) (by positivity)]
+        nlinarith [h_pow_le]
+      have h_lt_alphag : 1 / (g : ℝ)^3 < alpha_g g := by
+        unfold alpha_g
+        rw [div_lt_div_iff₀ (by positivity) (by positivity)]
+        nlinarith [hg3]
+      rw [h_zpow_eq]
+      exact h_recip_le.trans_lt (h_lt_alphag.trans hα_gt)
     have h_div_eq : (1 / α) * (g : ℝ)^(-(m : ℤ)) = (g : ℝ)^(-(m : ℤ)) / α := by ring
     rw [h_div_eq]
     exact (div_lt_one₀ hα_pos).mpr h_pow_lt
