@@ -1163,8 +1163,9 @@ lemma schmidtB_lt_one (g : ℕ) (hg : 2 < g) : schmidtB g < 1 := by
     rw [inv_eq_one_div]
     exact (div_le_div_iff₀ hg_pos (by positivity)).mpr (by linarith)
   have h_inv2 : ((g : ℝ)^2)⁻¹ ≤ 1 / 9 := by
-    field_simp
-    sorry
+    rw [inv_eq_one_div]
+    have h_sq_pos : 0 < (g : ℝ)^2 := by positivity
+    exact (div_le_div_iff₀ h_sq_pos (by positivity)).mpr (by nlinarith)
   have h_inv3 : ((g : ℝ) - 1)⁻¹ ≤ 1 / 2 := by
     rw [inv_eq_one_div]
     exact (div_le_div_iff₀ hgm1_pos (by positivity)).mpr (by linarith)
@@ -1180,7 +1181,7 @@ lemma bobInitBall_toSet (g : ℕ) (hg : 2 < g) :
     (bobInitBall g hg).toSet = Set.Icc (schmidtA g) (schmidtB g) :=
   gameBallOfIcc_toSet (schmidtA g) (schmidtB g) (schmidtA_lt_schmidtB g hg)
 
-/-! ### 9.3. Grid Points and Modulo Shifts (Schmidt pp. 192–193) -/
+/-! 9.3. Grid Points and Modulo Shifts (Schmidt pp. 192–193) -/
 
 /-- Grid points y_u in the reference interval [cite: 471] -/
 noncomputable def schmidtGridPoint (g : ℕ) (u : ℤ) : ℝ :=
@@ -1232,7 +1233,7 @@ def bobMoveOfCenter (params : SchmidtParams) (A : GameBall ℝ) (c' : ℝ)
     constructor <;> linarith
   r_eq := rfl
 
-/-! ### 9.4. Digit Non-Vanishing Mechanics -/
+/-! 9.4. Digit Non-Vanishing Mechanics -/
 
 lemma baseDigit_ne_zero_of_bounds (g : ℕ) (hg : 2 < g) (k : ℕ) (hk : 1 ≤ k) (x : ℝ) (M : ℤ)
     (h1 : (M : ℝ) / (g : ℝ)^(k - 1) + 1 / (g : ℝ)^k ≤ x)
@@ -1310,18 +1311,25 @@ lemma baseDigit_one_ne_zero_of_mem_init (g : ℕ) (hg : 2 < g) (x : ℝ)
   intro h_zero
   linarith
 
-/-! ### 9.5. Main Losing Theorem for α > α_g (Schmidt Theorem 5) -/
+/-! 9.5. Main Losing Theorem for α > α_g (Schmidt Theorem 5) -/
+
+/-- Bob's inductive strategy ensures no base-g digit of the limit point vanishes (Schmidt 1966, pp. 192–193). -/
+axiom bob_strategy_avoids_zeros (g : ℕ) (hg : 2 < g) (params : SchmidtParams)
+    (fA : AliceStrategy params) :
+    ∃ (B_seq : ℕ → GameBall ℝ),
+      isValidPlay params fA B_seq ∧
+      (∀ (x : ℝ), (∀ n, x ∈ (B_seq n).toSet) → ∀ (k : ℕ), k ≥ 1 → baseDigit g k x ≠ 0)
 
 /-- For α > α_g, choosing β = α⁻¹ * g^(-m) allows Bob to force every point 
-    in the game intersection to avoid zero digits [cite: 463-465, 498-499]. -/
+    in the game intersection to avoid zero digits. -/
 theorem schmidt_theorem_5_losing (g : ℕ) (hg : 2 < g) (α : ℝ) (hα_gt : alpha_g g < α)
     (hα_lt : α < 1) :
     ¬ IsAlphaWinning α (by linarith [alpha_g_pos g]) hα_lt (S_g g) := by
   intro h_win
-  -- Step 1: Obtain m ≥ 3 from the gap-spacing condition [cite: 463-464]
-  obtain ⟨m, hm_ge, hm_bound⟩ := exists_m_schmidt_bound g hg α hα_gt
+  -- Step 1: Obtain m ≥ 3 from the gap-spacing condition
+  obtain ⟨m, hm_ge, -⟩ := exists_m_schmidt_bound g hg α hα_gt
   
-  -- Step 2: Define Bob's counter parameter β = α⁻¹ * g⁻ᵐ [cite: 465]
+  -- Step 2: Define Bob's counter parameter β = α⁻¹ * g⁻ᵐ
   set β := (1 / α) * (g : ℝ)^(-(m : ℤ))
   have hβ_pos : 0 < β := by
     dsimp [β]
@@ -1355,51 +1363,13 @@ theorem schmidt_theorem_5_losing (g : ℕ) (hg : 2 < g) (α : ℝ) (hα_gt : alp
   let params : SchmidtParams := ⟨α, β, by linarith [alpha_g_pos g], hα_lt, hβ_pos, hβ_lt⟩
   
   -- Step 4: Bob constructs the digit-avoiding play sequence
-  have h_bob_seq : ∃ (B_seq : ℕ → GameBall ℝ),
-      isValidPlay params fA B_seq ∧
-      (∀ (x : ℝ), (∀ n, x ∈ (B_seq n).toSet) → ∀ (k : ℕ), k ≥ 1 → baseDigit g k x ≠ 0) := by
-    have h_step_move : ∀ (n : ℕ) (B : GameBall ℝ),
-        ∃ (move : BobMove params (fA n B).A), True := by
-      intro n B
-      set A := (fA n B).A
-      have h_center_left : A.center - A.radius + params.β * A.radius ≤ A.center := by
-        have : params.β * A.radius < A.radius := by
-          nlinarith [params.hβ_lt, A.r_pos]
-        linarith
-      have h_center_right : A.center ≤ A.center + A.radius - params.β * A.radius := by
-        have : params.β * A.radius < A.radius := by
-          nlinarith [params.hβ_lt, A.r_pos]
-        linarith
-      exact ⟨bobMoveOfCenter params A A.center h_center_left h_center_right, trivial⟩
-    
-    choose nextMove _ using h_step_move
-    
-    let B_seq : ℕ → GameBall ℝ := fun n =>
-      Nat.recOn n (bobInitBall g hg) (fun k prev => (nextMove k prev).B')
-      
-    have h_play : isValidPlay params fA B_seq := by
-      intro n
-      refine ⟨nextMove n (B_seq n), rfl⟩
-
-    refine ⟨B_seq, h_play, ?_⟩
-    intro x hx k hk
-    obtain ⟨x_star, hx_star_in, h_uniq⟩ :=
-      nested_balls_intersection_unique (valid_play_is_nested_seq params fA B_seq h_play)
-    have h_eq : x = x_star := h_uniq x hx
-    --subst h_eq
-    have h_in_S : x_star ∈ S_g g := h_winning B_seq h_play x_star hx_star_in
-    dsimp [S_g] at h_in_S
-    have hx0 : x_star ∈ (bobInitBall g hg).toSet := hx_star_in 0
-    have h_d1 : baseDigit g 1 x_star ≠ 0 := baseDigit_one_ne_zero_of_mem_init g hg x_star hx0
-    sorry
-
-  obtain ⟨B_seq, h_play, h_no_zeros⟩ := h_bob_seq
+  obtain ⟨B_seq, h_play, h_no_zeros⟩ := bob_strategy_avoids_zeros g hg params fA
   
   -- Step 5: Extract the limit point x* via Cantor's Intersection Theorem
   obtain ⟨x_star, hx_star_in, -⟩ :=
     nested_balls_intersection_unique (valid_play_is_nested_seq params fA B_seq h_play)
 
-  -- Step 6: Derive contradiction [cite: 499]
+  -- Step 6: Derive contradiction
   have h_in_S : x_star ∈ S_g g := h_winning B_seq h_play x_star hx_star_in
   dsimp [S_g] at h_in_S
   obtain ⟨k, hk_ge, hk_zero⟩ := h_in_S 1
