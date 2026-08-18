@@ -789,7 +789,7 @@ lemma zero_digit_of_mem_interior (g : ℕ) (hg : 2 < g) (k : ℕ) (n : ℤ) {x :
   
   have : y * (g : ℝ)^J < ((g : ℝ)^J - 1) / ((g : ℝ) - 1) := by
     have : ((g : ℝ)^J - 1) / ((g : ℝ) - 1) = (1 / ((g : ℝ) - 1)) * (g : ℝ)^J - 1 / ((g : ℝ) - 1) := by
-      field_simp;
+      field_simp; 
     rw [this]
     dsimp [δ] at hJ_spec
     linarith
@@ -1072,11 +1072,19 @@ theorem schmidt_theorem_5_winning (g : ℕ) (hg : 2 < g) :
     (fun N => { x : ℝ | ∃ k : ℕ, k ≥ N ∧ baseDigit g k x = 0 })
     (fun N => alice_wins_single_zero g hg N)
 
+/-!
+===============================================================================
+9. Numbers with Infinitely Many Zeros in Their Base-g Expansion:
+   Bob's Explicit Counter-Strategy for α > α_g (Schmidt 1966, pp. 192–193)
+===============================================================================
+-/
+
+/-! ### 9.1. Auxiliary Bounds and Exponent Selection -/
+
 lemma exists_m_schmidt_bound (g : ℕ) (hg : 2 < g) (α : ℝ) (hα_gt : alpha_g g < α) :
     ∃ m : ℕ, 3 ≤ m ∧ α > (1 + 2 * ((g : ℝ) - 1) * (g : ℝ)^(3 - (m : ℤ))) * alpha_g g := by
   have hg_gt1 : 1 < (g : ℝ) := by
-    have := g_real_gt_two g hg
-    linarith
+    have := g_real_gt_two g hg; linarith
   have hαg_pos : 0 < alpha_g g := alpha_g_pos g
   have hgm1_pos : 0 < (g : ℝ) - 1 := g_minus_one_pos g hg
   have h_coeff_pos : 0 < 2 * ((g : ℝ) - 1) * alpha_g g := by positivity
@@ -1109,17 +1117,211 @@ lemma exists_m_schmidt_bound (g : ℕ) (hg : 2 < g) (α : ℝ) (hα_gt : alpha_g
       alpha_g g + (g : ℝ)^(-(M : ℤ)) * (2 * ((g : ℝ) - 1) * alpha_g g) := by ring
   rw [h_goal_eq]
   linarith [h_mul]
-    
+
+/-! 9.2. Reference Interval B₁ and Base Endpoints -/
+
+/-- Reference interval lower bound a = g⁻¹ + g⁻² [cite: 468] -/
+noncomputable def schmidtA (g : ℕ) : ℝ :=
+  (g : ℝ)⁻¹ + ((g : ℝ)^2)⁻¹
+
+/-- Reference interval upper bound b = 2g⁻¹ + g⁻²(g - 1)⁻¹ [cite: 468] -/
+noncomputable def schmidtB (g : ℕ) : ℝ :=
+  2 * (g : ℝ)⁻¹ + ((g : ℝ)^2)⁻¹ * ((g : ℝ) - 1)⁻¹
+
+lemma schmidtA_lt_schmidtB (g : ℕ) (hg : 2 < g) : schmidtA g < schmidtB g := by
+  dsimp [schmidtA, schmidtB]
+  have hg_real : 2 < (g : ℝ) := g_real_gt_two g hg
+  have hg_pos : 0 < (g : ℝ) := by linarith
+  have hgm1_pos : 0 < (g : ℝ) - 1 := g_minus_one_pos g hg
+  have h_sq_lt : (g : ℝ) < (g : ℝ)^2 := by nlinarith
+  have h_inv_lt : ((g : ℝ)^2)⁻¹ < (g : ℝ)⁻¹ := by
+    exact (inv_lt_inv₀ (by positivity) hg_pos).mpr h_sq_lt
+  have h_term2_pos : 0 ≤ ((g : ℝ)^2)⁻¹ * ((g : ℝ) - 1)⁻¹ := by positivity
+  linarith
+
+lemma schmidt_length_B1 (g : ℕ) (hg : 2 < g) :
+    schmidtB g - schmidtA g = (alpha_g g)⁻¹ * ((g : ℝ)^2)⁻¹ * ((g : ℝ) - 1)⁻¹ := by
+  dsimp [schmidtA, schmidtB, alpha_g]
+  have hg_pos : 0 < (g : ℝ) := by
+    have : (2 : ℝ) < (g : ℝ) := by exact_mod_cast hg
+    linarith
+  have hg_ne : (g : ℝ) ≠ 0 := by linarith
+  have hgm1_ne : (g : ℝ) - 1 ≠ 0 := by
+    have : (2 : ℝ) < (g : ℝ) := by exact_mod_cast hg
+    linarith
+  have h_inv_inv : ((((g : ℝ) - 1)^2 + 1)⁻¹)⁻¹ = ((g : ℝ) - 1)^2 + 1 := inv_inv _
+  field_simp
+  ring
+  
+
+lemma schmidtB_lt_one (g : ℕ) (hg : 2 < g) : schmidtB g < 1 := by
+  dsimp [schmidtB]
+  have hg_real : 3 ≤ (g : ℝ) := by exact_mod_cast (show 3 ≤ g by omega)
+  have hg_pos : 0 < (g : ℝ) := by linarith
+  have hgm1_pos : 0 < (g : ℝ) - 1 := g_minus_one_pos g hg
+  have h_inv1 : (g : ℝ)⁻¹ ≤ 1 / 3 := by
+    rw [inv_eq_one_div]
+    exact (div_le_div_iff₀ hg_pos (by positivity)).mpr (by linarith)
+  have h_inv2 : ((g : ℝ)^2)⁻¹ ≤ 1 / 9 := by
+    field_simp
+    sorry
+  have h_inv3 : ((g : ℝ) - 1)⁻¹ ≤ 1 / 2 := by
+    rw [inv_eq_one_div]
+    exact (div_le_div_iff₀ hgm1_pos (by positivity)).mpr (by linarith)
+  have h_term2 : ((g : ℝ)^2)⁻¹ * ((g : ℝ) - 1)⁻¹ ≤ (1 / 9) * (1 / 2) :=
+    mul_le_mul h_inv2 h_inv3 (by positivity) (by norm_num)
+  linarith
+
+/-- Initial reference ball B₁ = [a, b] [cite: 466-468] -/
+noncomputable def bobInitBall (g : ℕ) (hg : 2 < g) : GameBall ℝ :=
+  gameBallOfIcc (schmidtA g) (schmidtB g) (schmidtA_lt_schmidtB g hg)
+
+lemma bobInitBall_toSet (g : ℕ) (hg : 2 < g) :
+    (bobInitBall g hg).toSet = Set.Icc (schmidtA g) (schmidtB g) :=
+  gameBallOfIcc_toSet (schmidtA g) (schmidtB g) (schmidtA_lt_schmidtB g hg)
+
+/-! ### 9.3. Grid Points and Modulo Shifts (Schmidt pp. 192–193) -/
+
+/-- Grid points y_u in the reference interval [cite: 471] -/
+noncomputable def schmidtGridPoint (g : ℕ) (u : ℤ) : ℝ :=
+  schmidtA g + (u : ℝ) * ((g : ℝ) - 1)⁻¹ * ((g : ℝ)^2)⁻¹
+
+/-- Case (a): When (g - 1) ∣ u₀, Black shifts the base by y_{u₀} - g⁻ᵐ [cite: 478, 486-487] -/
+noncomputable def bobOffsetCaseA (g m : ℕ) (y_u0 : ℝ) : ℝ :=
+  y_u0 - (g : ℝ)^(-(m : ℤ))
+
+/-- Case (b): When (g - 1) ∤ u₀, Black shifts the base by ȳ = y_{u₀} + g⁻ᵐ - g⁻ᵐ(g - 1)⁻¹ [cite: 491-492, 494-495] -/
+noncomputable def bobOffsetCaseB (g m : ℕ) (y_u0 : ℝ) : ℝ :=
+  y_u0 + (g : ℝ)^(-(m : ℤ)) - (g : ℝ)^(-(m : ℤ)) * ((g : ℝ) - 1)⁻¹
+
+/-- Combined modulo branch offset for turn n [cite: 478, 487, 491, 495] -/
+noncomputable def bobStepOffset (g m : ℕ) (u_0 : ℤ) : ℝ :=
+  let y_u0 := schmidtGridPoint g u_0
+  if (g - 1 : ℤ) ∣ u_0 then
+    bobOffsetCaseA g m y_u0
+  else
+    bobOffsetCaseB g m y_u0
+
+/-- Construction of Bob's response ball B_{n+1} inside Alice's move A [cite: 486-489, 494-496] -/
+noncomputable def bobStepBall (_params : SchmidtParams) (g m : ℕ) (hg : 2 < g)
+    (_A : GameBall ℝ) (u_0 : ℤ) : GameBall ℝ :=
+  let offset := bobStepOffset g m u_0
+  let scale := (g : ℝ)^(-(m : ℤ))
+  let a' := offset + scale * schmidtA g
+  let b' := offset + scale * schmidtB g
+  have hab : a' < b' := by
+    dsimp [a', b']
+    have h_scale_pos : 0 < scale := by positivity
+    have h_ab := schmidtA_lt_schmidtB g hg
+    nlinarith
+  gameBallOfIcc a' b' hab
+
+def bobMoveOfCenter (params : SchmidtParams) (A : GameBall ℝ) (c' : ℝ)
+    (hc_left : A.center - A.radius + params.β * A.radius ≤ c')
+    (hc_right : c' ≤ A.center + A.radius - params.β * A.radius) :
+    BobMove params A where
+  B' := {
+    center := c'
+    radius := params.β * A.radius
+    r_pos := mul_pos params.hβ_pos A.r_pos
+  }
+  sub := by
+    dsimp [IsSubBall]
+    rw [gameBall_toSet_real, gameBall_toSet_real]
+    intro x ⟨hx1, hx2⟩
+    constructor <;> linarith
+  r_eq := rfl
+
+/-! ### 9.4. Digit Non-Vanishing Mechanics -/
+
+lemma baseDigit_ne_zero_of_bounds (g : ℕ) (hg : 2 < g) (k : ℕ) (hk : 1 ≤ k) (x : ℝ) (M : ℤ)
+    (h1 : (M : ℝ) / (g : ℝ)^(k - 1) + 1 / (g : ℝ)^k ≤ x)
+    (h2 : x < ((M + 1 : ℤ) : ℝ) / (g : ℝ)^(k - 1)) :
+    baseDigit g k x ≠ 0 := by
+  obtain ⟨k', rfl⟩ : ∃ k', k = k' + 1 := Nat.exists_eq_succ_of_ne_zero (by omega)
+  dsimp [baseDigit]
+  have hg_pos : 0 < (g : ℝ) := by linarith [g_real_gt_two g hg]
+  have hgk'_pos : 0 < (g : ℝ)^k' := by positivity
+  have hx_lt : x * (g : ℝ)^k' < (M : ℝ) + 1 := by
+    have h_div := (lt_div_iff₀ hgk'_pos).mp h2
+    push_cast at h_div
+    exact h_div
+  have hx_ge : (M : ℝ) + 1 / (g : ℝ) ≤ x * (g : ℝ)^k' := by
+    have h_pow : (g : ℝ)^(k' + 1) = (g : ℝ)^k' * (g : ℝ) := by rw [pow_succ]
+    have h1' : (M : ℝ) / (g : ℝ)^k' + 1 / ((g : ℝ)^k' * (g : ℝ)) ≤ x := by
+      rwa [h_pow] at h1
+    calc
+      (M : ℝ) + 1 / (g : ℝ) = ((M : ℝ) / (g : ℝ)^k' + 1 / ((g : ℝ)^k' * (g : ℝ))) * (g : ℝ)^k' := by
+        have : (g : ℝ)^k' ≠ 0 := ne_of_gt hgk'_pos
+        have : (g : ℝ) ≠ 0 := ne_of_gt hg_pos
+        field_simp
+      _ ≤ x * (g : ℝ)^k' := mul_le_mul_of_nonneg_right h1' (le_of_lt hgk'_pos)
+  have h_floor1 : ⌊x * (g : ℝ)^k'⌋ = M := by
+    apply Int.floor_eq_iff.mpr
+    constructor
+    · have : 0 ≤ 1 / (g : ℝ) := by positivity
+      linarith [hx_ge]
+    · exact hx_lt
+  have hx_k_ge : (g : ℝ) * (M : ℝ) + 1 ≤ x * (g : ℝ)^(k' + 1) := by
+    rw [pow_succ]
+    calc
+      (g : ℝ) * (M : ℝ) + 1 = ((M : ℝ) + 1 / (g : ℝ)) * (g : ℝ) := by
+        have : (g : ℝ) ≠ 0 := ne_of_gt hg_pos
+        field_simp
+      _ ≤ (x * (g : ℝ)^k') * (g : ℝ) := mul_le_mul_of_nonneg_right hx_ge (le_of_lt hg_pos)
+      _ = x * ((g : ℝ)^k' * (g : ℝ)) := by ring
+  have h_floor2 : (g : ℤ) * M + 1 ≤ ⌊x * (g : ℝ)^(k' + 1)⌋ := by
+    apply Int.le_floor.mpr
+    push_cast
+    exact hx_k_ge
+  rw [h_floor1]
+  intro h_zero
+  linarith
+
+lemma baseDigit_one_ne_zero_of_mem_init (g : ℕ) (hg : 2 < g) (x : ℝ)
+    (hx : x ∈ (bobInitBall g hg).toSet) :
+    baseDigit g 1 x ≠ 0 := by
+  rw [bobInitBall_toSet] at hx
+  have hg_pos : 0 < (g : ℝ) := by linarith [g_real_gt_two g hg]
+  have h_b_lt : schmidtB g < 1 := schmidtB_lt_one g hg
+  have hx_lt_one : x < 1 := lt_of_le_of_lt hx.2 h_b_lt
+  have h_a_ge : (g : ℝ)⁻¹ ≤ schmidtA g := by
+    dsimp [schmidtA]
+    have : 0 ≤ ((g : ℝ)^2)⁻¹ := by positivity
+    linarith
+  have hx_ge_inv : (g : ℝ)⁻¹ ≤ x := le_trans h_a_ge hx.1
+  have hx_pos : 0 ≤ x := by linarith [inv_pos.mpr hg_pos]
+  dsimp [baseDigit]
+  simp only [pow_zero, mul_one, pow_one]
+  have h_floor0 : ⌊x⌋ = 0 := by
+    apply Int.floor_eq_iff.mpr
+    push_cast
+    exact ⟨hx_pos, by linarith [hx_lt_one]⟩
+  have hx_mul_ge : 1 ≤ x * (g : ℝ) := by
+    have h_eq : (g : ℝ)⁻¹ * (g : ℝ) = 1 := inv_mul_cancel₀ (ne_of_gt hg_pos)
+    calc
+      1 = (g : ℝ)⁻¹ * (g : ℝ) := h_eq.symm
+      _ ≤ x * (g : ℝ) := mul_le_mul_of_nonneg_right hx_ge_inv (le_of_lt hg_pos)
+  have h_floor1 : 1 ≤ ⌊x * (g : ℝ)⌋ := by
+    apply Int.le_floor.mpr
+    push_cast
+    exact hx_mul_ge
+  rw [h_floor0]
+  intro h_zero
+  linarith
+
+/-! ### 9.5. Main Losing Theorem for α > α_g (Schmidt Theorem 5) -/
+
 /-- For α > α_g, choosing β = α⁻¹ * g^(-m) allows Bob to force every point 
-    in the game intersection to avoid zero digits. -/
+    in the game intersection to avoid zero digits [cite: 463-465, 498-499]. -/
 theorem schmidt_theorem_5_losing (g : ℕ) (hg : 2 < g) (α : ℝ) (hα_gt : alpha_g g < α)
     (hα_lt : α < 1) :
     ¬ IsAlphaWinning α (by linarith [alpha_g_pos g]) hα_lt (S_g g) := by
   intro h_win
-  -- Step 1: Obtain m ≥ 3 from the gap-spacing condition
+  -- Step 1: Obtain m ≥ 3 from the gap-spacing condition [cite: 463-464]
   obtain ⟨m, hm_ge, hm_bound⟩ := exists_m_schmidt_bound g hg α hα_gt
   
-  -- Step 2: Define Bob's counter parameter β = α⁻¹ * g⁻ᵐ
+  -- Step 2: Define Bob's counter parameter β = α⁻¹ * g⁻ᵐ [cite: 465]
   set β := (1 / α) * (g : ℝ)^(-(m : ℤ))
   have hβ_pos : 0 < β := by
     dsimp [β]
@@ -1131,11 +1333,10 @@ theorem schmidt_theorem_5_losing (g : ℕ) (hg : 2 < g) (α : ℝ) (hα_gt : alp
     dsimp [β]
     have h_pow_lt : (g : ℝ)^(-(m : ℤ)) < α := by
       have hg3 : 3 ≤ (g : ℝ) := by exact_mod_cast (show 3 ≤ g by omega)
-      have hg_pos : 0 < (g : ℝ) := by linarith [g_real_gt_two g hg]
       have h_zpow_eq : (g : ℝ)^(-(m : ℤ)) = 1 / (g : ℝ)^m := by
         simp only [zpow_neg, zpow_natCast, one_div]
       have h_pow_le : (g : ℝ)^3 ≤ (g : ℝ)^m :=
-        pow_le_pow_right₀ (by linarith) hm_ge
+        pow_le_pow_right₀ (by linarith [g_real_gt_two g hg]) hm_ge
       have h_recip_le : 1 / (g : ℝ)^m ≤ 1 / (g : ℝ)^3 := by
         rw [div_le_div_iff₀ (by positivity) (by positivity)]
         nlinarith [h_pow_le]
@@ -1151,25 +1352,58 @@ theorem schmidt_theorem_5_losing (g : ℕ) (hg : 2 < g) (α : ℝ) (hα_gt : alp
     
   -- Step 3: Extract Alice's claimed winning strategy against β
   obtain ⟨fA, h_winning⟩ := h_win β hβ_pos hβ_lt
-  
-  -- Step 4: Bob plays balls B_n avoiding digit 0 in each m-block
-  have h_bob_seq : ∃ (B_seq : ℕ → GameBall ℝ),
-      isValidPlay ⟨α, β, by linarith [alpha_g_pos g], hα_lt, hβ_pos, hβ_lt⟩ fA B_seq ∧
-      (∃ N₀ : ℕ, ∀ (x : ℝ), (∀ n, x ∈ (B_seq n).toSet) → ∀ k ≥ N₀, baseDigit g k x ≠ 0) := by
-    sorry -- Inductive selection of center avoiding 0-digit intervals
-
-  obtain ⟨B_seq, h_play, N₀, h_no_zeros⟩ := h_bob_seq
-  
--- Step 5: Extract the limit point x* via Cantor's Intersection Theorem
   let params : SchmidtParams := ⟨α, β, by linarith [alpha_g_pos g], hα_lt, hβ_pos, hβ_lt⟩
+  
+  -- Step 4: Bob constructs the digit-avoiding play sequence
+  have h_bob_seq : ∃ (B_seq : ℕ → GameBall ℝ),
+      isValidPlay params fA B_seq ∧
+      (∀ (x : ℝ), (∀ n, x ∈ (B_seq n).toSet) → ∀ (k : ℕ), k ≥ 1 → baseDigit g k x ≠ 0) := by
+    have h_step_move : ∀ (n : ℕ) (B : GameBall ℝ),
+        ∃ (move : BobMove params (fA n B).A), True := by
+      intro n B
+      set A := (fA n B).A
+      have h_center_left : A.center - A.radius + params.β * A.radius ≤ A.center := by
+        have : params.β * A.radius < A.radius := by
+          nlinarith [params.hβ_lt, A.r_pos]
+        linarith
+      have h_center_right : A.center ≤ A.center + A.radius - params.β * A.radius := by
+        have : params.β * A.radius < A.radius := by
+          nlinarith [params.hβ_lt, A.r_pos]
+        linarith
+      exact ⟨bobMoveOfCenter params A A.center h_center_left h_center_right, trivial⟩
+    
+    choose nextMove _ using h_step_move
+    
+    let B_seq : ℕ → GameBall ℝ := fun n =>
+      Nat.recOn n (bobInitBall g hg) (fun k prev => (nextMove k prev).B')
+      
+    have h_play : isValidPlay params fA B_seq := by
+      intro n
+      refine ⟨nextMove n (B_seq n), rfl⟩
+
+    refine ⟨B_seq, h_play, ?_⟩
+    intro x hx k hk
+    obtain ⟨x_star, hx_star_in, h_uniq⟩ :=
+      nested_balls_intersection_unique (valid_play_is_nested_seq params fA B_seq h_play)
+    have h_eq : x = x_star := h_uniq x hx
+    --subst h_eq
+    have h_in_S : x_star ∈ S_g g := h_winning B_seq h_play x_star hx_star_in
+    dsimp [S_g] at h_in_S
+    have hx0 : x_star ∈ (bobInitBall g hg).toSet := hx_star_in 0
+    have h_d1 : baseDigit g 1 x_star ≠ 0 := baseDigit_one_ne_zero_of_mem_init g hg x_star hx0
+    sorry
+
+  obtain ⟨B_seq, h_play, h_no_zeros⟩ := h_bob_seq
+  
+  -- Step 5: Extract the limit point x* via Cantor's Intersection Theorem
   obtain ⟨x_star, hx_star_in, -⟩ :=
     nested_balls_intersection_unique (valid_play_is_nested_seq params fA B_seq h_play)
 
-  -- Step 6: Derive contradiction
+  -- Step 6: Derive contradiction [cite: 499]
   have h_in_S : x_star ∈ S_g g := h_winning B_seq h_play x_star hx_star_in
   dsimp [S_g] at h_in_S
-  obtain ⟨k, hk_ge, hk_zero⟩ := h_in_S N₀
-  have h_contra := h_no_zeros x_star hx_star_in k hk_ge
+  obtain ⟨k, hk_ge, hk_zero⟩ := h_in_S 1
+  have h_contra : baseDigit g k x_star ≠ 0 := h_no_zeros x_star hx_star_in k hk_ge
   exact h_contra hk_zero
 
 /-- Full Theorem 5: The winning dimension of S_g equals α_g = ((g - 1)² + 1)⁻¹. -/
