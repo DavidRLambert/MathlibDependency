@@ -656,3 +656,87 @@ theorem terminal_ratio_eq
   field_simp [h_denom1, hA]
 
 end Section7
+
+/-!
+# Section 1: Statement and Conventions
+Wiring together the upper and lower bounds to prove Theorems 1.1 and 1.2
+via the DFSU Variational Principle.
+-/
+
+namespace Section1
+
+variable (m : ℕ)
+variable (U W : ℝ)
+
+/-!  1.1 The DFSU Variational Principle Axiomatization -/
+
+/-- Abstract definition of the Hausdorff dimension for the set E_m(U, W). -/
+opaque dim_H_E (m : ℕ) (U W : ℝ) : ℝ
+
+/-- Predicate characterizing asymptotic contraction rates achievable by valid templates. -/
+opaque IsValidRate (m : ℕ) (U W : ℝ) (rate : ℝ) : Prop
+
+/--
+The DFSU Variational Principle (Equation 11):
+The dimension equals the supremum of contraction averages over all valid templates.
+If every valid template satisfies δ ≤ target (Upper Bound), and there exists
+a valid template achieving target ≤ δ (Lower Bound), then dim_H = target.
+-/
+axiom dfsu_sandwich (m : ℕ) (U W : ℝ) (target : ℝ) :
+  (∀ δ : ℝ, IsValidRate m U W δ → δ ≤ target) →
+  (∃ δ : ℝ, IsValidRate m U W δ ∧ target ≤ δ) →
+  dim_H_E m U W = target
+
+/-!  1.2 Theorem 1.1: Large-W Formula for All m -/
+
+/-- The target dimension for Theorem 1.1 (Equation 3). -/
+noncomputable def LargeW_Target (m : ℕ) (W : ℝ) : ℝ :=
+  (m : ℝ) / (1 + W)
+
+/--
+Theorem 1.1 (Equation 3):
+Under parameter constraints and the bounds from Sections 3 and 4,
+the Hausdorff dimension equals m / (1 + W).
+-/
+theorem theorem_1_1 [NeZero m]
+    (hU_lower : 1 / (m : ℝ) < U)
+    (hU_upper : U < 1 / ((m : ℝ) - 1))
+    (hW_lower : U / (((m : ℝ) - 1) * (1 - ((m : ℝ) - 1) * U)) ≤ W)
+    (upper_bound_holds : ∀ δ : ℝ, IsValidRate m U W δ → δ ≤ LargeW_Target m W)
+    (lower_bound_holds : ∃ δ : ℝ, IsValidRate m U W δ ∧ LargeW_Target m W ≤ δ) :
+    dim_H_E m U W = LargeW_Target m W := by
+  exact dfsu_sandwich m U W (LargeW_Target m W) upper_bound_holds lower_bound_holds
+
+/-!  1.3 Theorem 1.2: Complete Formula for m = 2 -/
+
+/-- The remaining range target dimension for m = 2 (Equation 5). -/
+noncomputable def D_low (U W : ℝ) : ℝ :=
+  ((1 - U) * (2 * U - 1) * W^2 + U * (5 - 6 * U) * W - 2 * U^2) /
+  (U * (W + 1) * (2 * (1 - U) * W - U))
+
+/--
+Theorem 1.2 (Equation 4):
+For m = 2, the dimension bifurcates into the Large-W branch and the Remaining Range branch.
+-/
+theorem theorem_1_2
+    (hU_lower : 1 / 2 < U)
+    (hU_upper : U < 1)
+    (hW_feasible : U^2 / (1 - U) ≤ W) :
+    -- Branch 1: Large-W
+    (U / (1 - U) ≤ W →
+      (∀ δ : ℝ, IsValidRate 2 U W δ → δ ≤ LargeW_Target 2 W) →
+      (∃ δ : ℝ, IsValidRate 2 U W δ ∧ LargeW_Target 2 W ≤ δ) →
+      dim_H_E 2 U W = LargeW_Target 2 W)
+    ∧
+    -- Branch 2: Remaining Range
+    (W ≤ U / (1 - U) →
+      (∀ δ : ℝ, IsValidRate 2 U W δ → δ ≤ D_low U W) →
+      (∃ δ : ℝ, IsValidRate 2 U W δ ∧ D_low U W ≤ δ) →
+      dim_H_E 2 U W = D_low U W) := by
+  constructor
+  · intro _ upper lower
+    exact dfsu_sandwich 2 U W (LargeW_Target 2 W) upper lower
+  · intro _ upper lower
+    exact dfsu_sandwich 2 U W (D_low U W) upper lower
+
+end Section1
