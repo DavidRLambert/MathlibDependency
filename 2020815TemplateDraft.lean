@@ -403,6 +403,84 @@ theorem V_x_matches_rates :
 end Section4
 
 /-!
+ Section 5: The Remaining Range when m = 2
+Verifying the parameter domain equivalences and positivity conditions.
+-/
+
+namespace Section5
+
+variable (A B : ℝ)
+
+/-!  5.1 Parameter Thresholds -/
+
+/-- Parameter c = 1 - 2A. -/
+def c (A : ℝ) : ℝ := 1 - 2 * A
+
+/-- The B_* threshold (Equation 32). -/
+noncomputable def B_star (A : ℝ) : ℝ := A / (1 - A)
+
+/-- The B_min feasibility boundary (Equation 31). -/
+noncomputable def B_min (A : ℝ) : ℝ := A^2 / (1 - 3 * A + 3 * A^2)
+
+/-- Period length L (Equation 34). -/
+noncomputable def L (A B : ℝ) : ℝ := (c A * B) / (A * (1 + B) - B)
+
+/-!  5.2 Positivity & Equivalence Lemmas -/
+
+/-- The quadratic denominator 1 - 3A + 3A² is strictly positive for all real A. -/
+theorem denom_quad_pos (A : ℝ) : 0 < 1 - 3 * A + 3 * A^2 := by
+  have h_sq : 1 - 3 * A + 3 * A^2 = 3 * (A - 1 / 2)^2 + 1 / 4 := by ring
+  rw [h_sq]
+  positivity
+
+/--
+Verifying the claim below Eq (34):
+The denominator A(1 + B) - B is positive precisely when B < B_*.
+-/
+theorem denominator_pos_iff (hA_lt : A < 1) :
+    0 < A * (1 + B) - B ↔ B < B_star A := by
+  have h1 : 0 < 1 - A := by linarith
+  dsimp [B_star]
+  rw [lt_div_iff₀ h1]
+  constructor <;> intro h <;> linarith
+
+/--
+Verifying Equation (35):
+The feasibility condition A ≤ L * c is equivalent to B_min ≤ B.
+-/
+theorem feasibility_equivalence
+    (h_denom : 0 < A * (1 + B) - B) :
+    A ≤ L A B * c A ↔ B_min A ≤ B := by
+  have h_quad := denom_quad_pos A
+  have h_alg : (1 - 2 * A)^2 * B - A * (A * (1 + B) - B) = B * (1 - 3 * A + 3 * A^2) - A^2 := by
+    ring
+  dsimp [L, c, B_min]
+  have h_prod : ((1 - 2 * A) * B) / (A * (1 + B) - B) * (1 - 2 * A) =
+      ((1 - 2 * A)^2 * B) / (A * (1 + B) - B) := by ring
+  rw [h_prod, le_div_iff₀ h_denom, div_le_iff₀ h_quad]
+  constructor
+  · intro h
+    linarith [h, h_alg]
+  · intro h
+    linarith [h, h_alg]
+
+/-- Consistency check: B_min(A) < B_*(A) holds on the relevant interval 1/3 < A < 1/2. -/
+theorem B_min_lt_B_star (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2) :
+    B_min A < B_star A := by
+  have hA_pos : 0 < A := by linarith
+  have h_sub : 0 < 1 - A := by linarith
+  have h_quad := denom_quad_pos A
+  dsimp [B_min, B_star]
+  rw [div_lt_div_iff₀ h_quad h_sub]
+  have hc : 0 < 1 - 2 * A := by linarith
+  have hc_sq : 0 < (1 - 2 * A)^2 := sq_pos_of_ne_zero (ne_of_gt hc)
+  have h_prod : 0 < A * (1 - 2 * A)^2 := mul_pos hA_pos hc_sq
+  have h_diff : (1 - 3 * A + 3 * A^2) * A - A^2 * (1 - A) = A * (1 - 2 * A)^2 := by ring
+  linarith
+
+end Section5
+
+/-!
  Section 6: The lower-bound cycle for m = 2
 Verifying the 4-piece template parameters, lengths, phase exponents, and polynomial identity.
 -/
