@@ -740,3 +740,99 @@ theorem theorem_1_2
     exact dfsu_sandwich 2 U W (D_low U W) upper lower
 
 end Section1
+
+/-!
+ Section 8.3: The General Lower-Range Candidate (m ≥ 3)
+Verifying the formal analogue of the 4-piece cycle for arbitrary m.
+-/
+
+namespace Section8_3
+
+variable (m : ℕ)
+variable (A B : ℝ)
+variable (L : ℝ)
+
+/-!  8.3.1 General m Parameters -/
+
+/-- The parameter 'a' generalizes 'c' from m=2: a = 1 - m*A. -/
+def a (m : ℕ) (A : ℝ) : ℝ := 1 - (m : ℝ) * A
+
+/-- Coordinate transition x = L * a. -/
+def x (m : ℕ) (A L : ℝ) : ℝ := L * a m A
+
+/-- Height parameter H = L * A. -/
+def H (A L : ℝ) : ℝ := L * A
+
+/-- Denominator of the general period length L. -/
+def denom (m : ℕ) (A B : ℝ) : ℝ :=
+  A - B * (A + ((m : ℝ) - 1) * a m A)
+
+/-- Closed-form period length L generalizing Equation (34) to arbitrary m. -/
+noncomputable def L_general (m : ℕ) (A B : ℝ) : ℝ :=
+  (a m A * B) / denom m A B
+
+/-!  8.3.2 The Four Candidate Motions (Lengths and Rates) -/
+
+-- Lengths of the 4 pieces generalizing Equation (39)
+def len1 (m : ℕ) (A L : ℝ) : ℝ := (m : ℝ) * (x m A L - A)
+def len2 (m : ℕ) (A L : ℝ) : ℝ := H A L - x m A L
+def len3 (m : ℕ) (A L : ℝ) : ℝ := x m A L - a m A
+def len4 (m : ℕ) (A L : ℝ) : ℝ := ((m : ℝ) - 1) * (H A L - x m A L)
+
+-- Contraction rates δ for arbitrary m
+def rate1 (m : ℕ) : ℝ := (m : ℝ) - 1
+def rate2 : ℝ := 0
+def rate3 (m : ℕ) : ℝ := (m : ℝ)
+def rate4 (m : ℕ) : ℝ := (m : ℝ) - 1
+
+/-!  8.3.3 Algebraic Verifications -/
+
+/-- Fundamental parameter identity: a + m*A = 1. -/
+theorem a_add_m_A : a m A + (m : ℝ) * A = 1 := by
+  dsimp [a]
+  ring
+
+/-- The 4 candidate piece lengths sum to L - 1 for all m. -/
+theorem sum_of_lengths_general :
+    len1 m A L + len2 m A L + len3 m A L + len4 m A L = L - 1 := by
+  dsimp [len1, len2, len3, len4, H, x, a]
+  ring
+
+/-- Time q₂ at the end of the zero-rate piece, starting at q = 1. -/
+def q2 (m : ℕ) (A L : ℝ) : ℝ :=
+  1 + len1 m A L + len2 m A L
+
+/-- Canonical simplification of q₂: a + (m - 1)x + H. -/
+theorem q2_simplified :
+    q2 m A L = a m A + ((m : ℝ) - 1) * x m A L + H A L := by
+  dsimp [q2, len1, len2, a]
+  ring
+
+/-- Verifying the phase exponent ratio H / q₂ = B for general m. -/
+theorem Pd_q2_ratio_general
+    (h_denom : denom m A B ≠ 0)
+    (h_q2_pos : q2 m A (L_general m A B) ≠ 0) :
+    H A (L_general m A B) / q2 m A (L_general m A B) = B := by
+  rw [div_eq_iff h_q2_pos, q2_simplified]
+  dsimp [H, x, L_general]
+  field_simp [h_denom]
+  dsimp [denom]
+  ring
+
+/-!  8.3.4 Total Contraction Mass -/
+
+/-- Total contraction mass V_m over the 4 pieces. -/
+def V_m (m : ℕ) (A L : ℝ) : ℝ :=
+  len1 m A L * rate1 m +
+  len2 m A L * rate2 +
+  len3 m A L * rate3 m +
+  len4 m A L * rate4 m
+
+/-- Reduced formula for the total contraction mass for arbitrary m. -/
+theorem V_m_eq :
+    V_m m A L =
+    (2 * (m : ℝ) - 1) * x m A L + ((m : ℝ) - 1)^2 * H A L - (m : ℝ) * (1 - A) := by
+  dsimp [V_m, len1, len2, len3, len4, rate1, rate2, rate3, rate4, a]
+  ring
+
+end Section8_3
