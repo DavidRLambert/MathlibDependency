@@ -836,3 +836,87 @@ theorem V_m_eq :
   ring
 
 end Section8_3
+
+/-!
+ Section 8.3: The Surgery Principle
+Proving that local perturbations maximize contraction if and only if they minimize the defect.
+-/
+
+namespace LocalSurgery
+
+open LinearPiece
+
+variable {m : ℕ}
+
+/-- 
+A "Local Surgery" replaces an original trajectory `l_orig` 
+with a perturbed trajectory `l_pert` over the same total time interval, 
+achieving the exact same change in the top coordinate P_d.
+-/
+structure Surgery (m : ℕ) where
+  l_orig : List (LinearPiece m)
+  l_pert : List (LinearPiece m)
+  -- The surgery happens over the same total time duration
+  same_duration : sum_len l_orig = sum_len l_pert
+  -- The surgery achieves the same total change in P_d
+  same_Pd_displacement : sum_Pd_change l_orig = sum_Pd_change l_pert
+
+namespace Surgery
+
+variable (s : Surgery m)
+
+/-- 
+The core exchange identity: The difference in total contraction mass 
+between the perturbed and original trajectories equals the exact 
+reduction in their accumulated defect.
+-/
+theorem delta_exchange :
+    sum_delta s.l_pert - sum_delta s.l_orig = 
+    sum_defect s.l_orig - sum_defect s.l_pert := by
+  have h_orig := global_integral_identity s.l_orig
+  have h_pert := global_integral_identity s.l_pert
+  have h_dur := s.same_duration
+  have h_pd := s.same_Pd_displacement
+  rw [h_orig, h_pert, ← h_dur, ← h_pd]
+  ring
+
+/-- 
+The Variational Surgery Principle:
+A perturbed trajectory improves (or matches) the total contraction 
+if and only if it decreases (or matches) the accumulated defect.
+-/
+theorem optimal_iff_minimal_defect :
+    sum_delta s.l_orig ≤ sum_delta s.l_pert ↔ 
+    sum_defect s.l_pert ≤ sum_defect s.l_orig := by
+  have h_ex := s.delta_exchange
+  constructor <;> intro h <;> linarith
+
+/-- Contraction gain when surgery produces a defect-free trajectory (Q_pert = 0). -/
+theorem delta_gain_of_zero_defect (h_zero : sum_defect s.l_pert = 0) :
+    sum_delta s.l_pert - sum_delta s.l_orig = sum_defect s.l_orig := by
+  have h_ex := s.delta_exchange
+  linarith
+
+/-- 
+Defect-free optimality: Any perturbation that eliminates the defect (Q_pert = 0)
+is always greater than or equal to an original trajectory with non-negative defect.
+-/
+theorem zero_defect_is_optimal
+    (h_orig_def : ∀ p ∈ s.l_orig, 0 ≤ p.defect)
+    (h_pert_zero : sum_defect s.l_pert = 0) :
+    sum_delta s.l_orig ≤ sum_delta s.l_pert := by
+  have h_orig_nonneg := sum_defect_nonneg s.l_orig h_orig_def
+  rw [s.optimal_iff_minimal_defect]
+  linarith
+
+/-- The surgery principle on the normalized average contraction rates. -/
+theorem average_rate_iff_minimal_defect (h_T_pos : 0 < sum_len s.l_orig) :
+    sum_delta s.l_orig / sum_len s.l_orig ≤ sum_delta s.l_pert / sum_len s.l_pert ↔
+    sum_defect s.l_pert ≤ sum_defect s.l_orig := by
+  have hT : sum_len s.l_pert = sum_len s.l_orig := s.same_duration.symm
+  rw [hT, div_le_div_iff_of_pos_right h_T_pos]
+  exact s.optimal_iff_minimal_defect
+
+end Surgery
+
+end LocalSurgery
