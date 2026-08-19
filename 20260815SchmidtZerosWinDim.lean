@@ -1233,6 +1233,151 @@ def bobMoveOfCenter (params : SchmidtParams) (A : GameBall ℝ) (c' : ℝ)
     constructor <;> linarith
   r_eq := rfl
 
+lemma exists_closest_grid_point (g : ℕ) (hg : 2 < g) (c : ℝ) :
+    ∃ (u : ℤ), |c - schmidtGridPoint g u| ≤ (1 / 2) * ((g : ℝ) - 1)⁻¹ * ((g : ℝ)^2)⁻¹ := by
+  set Δ := ((g : ℝ) - 1)⁻¹ * ((g : ℝ)^2)⁻¹
+  have hΔ_pos : 0 < Δ := by
+    dsimp [Δ]
+    have : 0 < (g : ℝ) - 1 := g_minus_one_pos g hg
+    positivity
+  set t := (c - schmidtA g) / Δ
+  set u := ⌊t + 1 / 2⌋
+  use u
+  have h_floor_le : (u : ℝ) ≤ t + 1 / 2 := Int.floor_le _
+  have h_lt_floor : t + 1 / 2 < (u : ℝ) + 1 := Int.lt_floor_add_one _
+  have h_dist : |t - (u : ℝ)| ≤ 1 / 2 := by
+    rw [abs_le]
+    constructor <;> linarith
+  have h_eq : c - schmidtGridPoint g u = (t - (u : ℝ)) * Δ := by
+    have hΔ_ne : Δ ≠ 0 := ne_of_gt hΔ_pos
+    dsimp [schmidtGridPoint, t, Δ]
+    rw [sub_mul, div_mul_cancel₀ _ hΔ_ne]
+    ring
+  rw [h_eq, abs_mul, abs_of_pos hΔ_pos, mul_assoc]
+  exact mul_le_mul_of_nonneg_right h_dist (le_of_lt hΔ_pos)
+
+lemma bobStepBall_subset_interval (g m : ℕ) (hg : 2 < g) (u_0 : ℤ) :
+    let B' := bobStepBall ⟨0.5, 0.5, by norm_num, by norm_num, by norm_num, by norm_num⟩ g m hg (gameBallOfIcc 0 1 (by norm_num)) u_0
+    let y := schmidtGridPoint g u_0
+    B'.toSet ⊆ Set.Icc (y - (g : ℝ)^(1 - (m : ℤ))) (y + (g : ℝ)^(1 - (m : ℤ))) := by
+  intro B' y x hx
+  -- Unfold the let-binding B' along with the definitions in hx
+  dsimp [B', bobStepBall, bobStepOffset, GameBall.toSet] at hx
+  have hg_pos : 0 < (g : ℝ) := by linarith [g_real_gt_two g hg]
+  have hg_ge3 : (3 : ℝ) ≤ (g : ℝ) := by exact_mod_cast (show 3 ≤ g by omega)
+  have h_a_pos : 0 < schmidtA g := by
+    dsimp [schmidtA]; positivity
+  have h_a_lt_b : schmidtA g < schmidtB g := schmidtA_lt_schmidtB g hg
+  have h_b_lt1 : schmidtB g < 1 := schmidtB_lt_one g hg
+  have h_scale_pos : 0 < (g : ℝ)^(-(m : ℤ)) := by positivity
+  have h_zpow_le : (g : ℝ)^(-(m : ℤ)) ≤ (g : ℝ)^(1 - (m : ℤ)) := by
+    have h_exp : -(m : ℤ) ≤ 1 - (m : ℤ) := by omega
+    exact zpow_le_zpow_right₀ (by linarith) h_exp
+  have h_2scale_le : 2 * (g : ℝ)^(-(m : ℤ)) ≤ (g : ℝ)^(1 - (m : ℤ)) := by
+    have h_split : (g : ℝ)^(1 - (m : ℤ)) = (g : ℝ) * (g : ℝ)^(-(m : ℤ)) := by
+      have : (1 - (m : ℤ)) = 1 + -(m : ℤ) := by ring
+      rw [this, zpow_add₀ (ne_of_gt hg_pos), zpow_one]
+    rw [h_split]
+    nlinarith
+
+  split_ifs at hx with h_div
+  · -- Case (a): (g - 1) ∣ u_0
+    dsimp [bobOffsetCaseA, gameBallOfIcc, GameBall.toSet] at hx
+    rw [Metric.mem_closedBall, Real.dist_eq, abs_le] at hx
+    dsimp [y]
+    constructor
+    · nlinarith [hx.1, h_a_pos, h_scale_pos, h_zpow_le]
+    · nlinarith [hx.2, h_b_lt1, h_scale_pos, h_zpow_le]
+  · -- Case (b): (g - 1) ∤ u_0
+    dsimp [bobOffsetCaseB, gameBallOfIcc, GameBall.toSet] at hx
+    rw [Metric.mem_closedBall, Real.dist_eq, abs_le] at hx
+    have hgm1_pos : 0 < (g : ℝ) - 1 := g_minus_one_pos g hg
+    have hgm1_inv_pos : 0 < ((g : ℝ) - 1)⁻¹ := by positivity
+    have hgm1_inv_le : ((g : ℝ) - 1)⁻¹ ≤ 1 := by
+      have : 1 ≤ (g : ℝ) - 1 := by linarith
+      field_simp
+      exact this
+    dsimp [y]
+    constructor
+    · nlinarith [hx.1, h_a_pos, h_scale_pos, h_zpow_le, hgm1_inv_le]
+    · nlinarith [hx.2, h_b_lt1, h_scale_pos, h_2scale_le, hgm1_inv_pos]
+
+/-- Bob's step ball B_{n+1} is completely contained inside Alice's ball A_n. -/
+theorem bobStepBall_isSubBall (params : SchmidtParams) (g m : ℕ) (hg : 2 < g) (_hm : 3 ≤ m)
+    (A : GameBall ℝ) (rB : ℝ) (hrB : 0 < rB)
+    (hA_rad : A.radius = params.α * rB)
+    (h_scale_rB : rB = (1 / 2) * (alpha_g g)⁻¹ * ((g : ℝ) - 1)⁻¹ * ((g : ℝ)^2)⁻¹)
+    (hα_bound : params.α > (1 + 2 * ((g : ℝ) - 1) * (g : ℝ)^(3 - (m : ℤ))) * alpha_g g)
+    (u_0 : ℤ)
+    (hu0 : |A.center - schmidtGridPoint g u_0| ≤ (1 / 2) * ((g : ℝ) - 1)⁻¹ * ((g : ℝ)^2)⁻¹) :
+    IsSubBall (bobStepBall params g m hg A u_0) A := by
+  dsimp [IsSubBall]
+  intro x hx
+
+  have hg_pos : 0 < (g : ℝ) := by linarith [g_real_gt_two g hg]
+  have hg_ne : (g : ℝ) ≠ 0 := ne_of_gt hg_pos
+  have hgm1_pos : 0 < (g : ℝ) - 1 := g_minus_one_pos g hg
+  have hgm1_ne : (g : ℝ) - 1 ≠ 0 := ne_of_gt hgm1_pos
+  have hαg_pos : 0 < alpha_g g := alpha_g_pos g
+  have hαg_ne : alpha_g g ≠ 0 := ne_of_gt hαg_pos
+
+  -- 1. Exponent and spacing reduction
+  set Δ := ((g : ℝ) - 1)⁻¹ * ((g : ℝ)^2)⁻¹
+
+  have h_pow_cancel : (g : ℝ)^(3 - (m : ℤ)) * ((g : ℝ)^2)⁻¹ = (g : ℝ)^(1 - (m : ℤ)) := by
+    have h2 : ((g : ℝ)^2)⁻¹ = (g : ℝ)^(-2 : ℤ) := by
+      rw [show (g : ℝ)^2 = (g : ℝ)^(2 : ℤ) by norm_cast, ← zpow_neg]
+    rw [h2, ← zpow_add₀ hg_ne]
+    congr 1
+    ring
+
+  have h_prod_delta : ((g : ℝ) - 1) * (g : ℝ)^(3 - (m : ℤ)) * Δ = (g : ℝ)^(1 - (m : ℤ)) := by
+    dsimp [Δ]
+    calc
+      ((g : ℝ) - 1) * (g : ℝ)^(3 - (m : ℤ)) * (((g : ℝ) - 1)⁻¹ * ((g : ℝ)^2)⁻¹)
+        = (((g : ℝ) - 1) * ((g : ℝ) - 1)⁻¹) * ((g : ℝ)^(3 - (m : ℤ)) * ((g : ℝ)^2)⁻¹) := by ring
+      _ = 1 * ((g : ℝ)^(3 - (m : ℤ)) * ((g : ℝ)^2)⁻¹) := by rw [mul_inv_cancel₀ hgm1_ne]
+      _ = (g : ℝ)^(1 - (m : ℤ)) := by rw [one_mul, h_pow_cancel]
+
+  -- 2. Scale rB simplification
+  have h_rB_def : rB = (1 / 2) * (alpha_g g)⁻¹ * Δ := by
+    dsimp [Δ]
+    rw [← mul_assoc]
+    exact h_scale_rB
+
+  have h_alpha_rB : alpha_g g * rB = (1 / 2) * Δ := by
+    rw [h_rB_def]
+    calc
+      alpha_g g * ((1 / 2) * (alpha_g g)⁻¹ * Δ)
+        = (alpha_g g * (alpha_g g)⁻¹) * ((1 / 2) * Δ) := by ring
+      _ = 1 * ((1 / 2) * Δ) := by rw [mul_inv_cancel₀ hαg_ne]
+      _ = (1 / 2) * Δ := by ring
+
+  -- 3. Lower bound on A.radius
+  have h_rA_gt : (1 / 2) * Δ + (g : ℝ)^(1 - (m : ℤ)) ≤ A.radius := by
+    have h_bound : ((1 + 2 * ((g : ℝ) - 1) * (g : ℝ)^(3 - (m : ℤ))) * alpha_g g) * rB ≤ params.α * rB :=
+      mul_le_mul_of_nonneg_right (le_of_lt hα_bound) (le_of_lt hrB)
+    have h_expand : ((1 + 2 * ((g : ℝ) - 1) * (g : ℝ)^(3 - (m : ℤ))) * alpha_g g) * rB
+        = (1 / 2) * Δ + (g : ℝ)^(1 - (m : ℤ)) := by
+      calc
+        ((1 + 2 * ((g : ℝ) - 1) * (g : ℝ)^(3 - (m : ℤ))) * alpha_g g) * rB
+          = (1 + 2 * ((g : ℝ) - 1) * (g : ℝ)^(3 - (m : ℤ))) * (alpha_g g * rB) := by ring
+        _ = (1 + 2 * ((g : ℝ) - 1) * (g : ℝ)^(3 - (m : ℤ))) * ((1 / 2) * Δ) := by rw [h_alpha_rB]
+        _ = (1 / 2) * Δ + ((g : ℝ) - 1) * (g : ℝ)^(3 - (m : ℤ)) * Δ := by ring
+        _ = (1 / 2) * Δ + (g : ℝ)^(1 - (m : ℤ)) := by rw [h_prod_delta]
+    rw [hA_rad]
+    rwa [h_expand] at h_bound
+
+  -- 4. Closed ball inclusion
+  have h_in_Icc := bobStepBall_subset_interval g m hg u_0 hx
+  rw [Set.mem_Icc] at h_in_Icc
+  rw [gameBall_toSet_real, Set.mem_Icc]
+  rw [abs_le] at hu0
+  dsimp [Δ] at h_rA_gt
+  constructor
+  · linarith [h_in_Icc.1, hu0.1, hu0.2, h_rA_gt]
+  · linarith [h_in_Icc.2, hu0.1, hu0.2, h_rA_gt]
+
 /-! 9.4. Digit Non-Vanishing Mechanics -/
 
 lemma baseDigit_ne_zero_of_bounds (g : ℕ) (hg : 2 < g) (k : ℕ) (hk : 1 ≤ k) (x : ℝ) (M : ℤ)
@@ -1375,6 +1520,244 @@ theorem schmidt_theorem_5_losing (g : ℕ) (hg : 2 < g) (α : ℝ) (hα_gt : alp
   obtain ⟨k, hk_ge, hk_zero⟩ := h_in_S 1
   have h_contra : baseDigit g k x_star ≠ 0 := h_no_zeros x_star hx_star_in k hk_ge
   exact h_contra hk_zero
+
+/-! ### 9.6. Digit-Block Non-Vanishing Invariance -/
+
+/-- Bound verifying that a real number in [a, b] has non-zero digit at scale k. -/
+lemma baseDigit_ne_zero_of_Icc (g : ℕ) (hg : 2 < g) (k : ℕ) (hk : 1 ≤ k) (M : ℤ)
+    (x : ℝ) (hx_ge : (M : ℝ) / (g : ℝ)^(k - 1) + 1 / (g : ℝ)^k ≤ x)
+    (hx_lt : x ≤ ((M : ℝ) + 1) / (g : ℝ)^(k - 1) - 1 / (g : ℝ)^(k + 1)) :
+    baseDigit g k x ≠ 0 := by
+  have hg_pos : 0 < (g : ℝ) := by linarith [g_real_gt_two g hg]
+  have h_gk1_pos : 0 < (g : ℝ)^(k + 1) := by positivity
+  have hx_strict_lt : x < ((M + 1 : ℤ) : ℝ) / (g : ℝ)^(k - 1) := by
+    push_cast
+    have : 0 < 1 / (g : ℝ)^(k + 1) := by positivity
+    linarith
+  exact baseDigit_ne_zero_of_bounds g hg k hk x M hx_ge hx_strict_lt
+
+/-- Case (a): Points in Bob's offset ball avoid zero digits for all intermediate indices 1 ≤ j ≤ m. -/
+lemma bob_digits_nonneg_caseA (g m : ℕ) (hg : 2 < g) (hm : 3 ≤ m) (u : ℤ) (q : ℤ)
+    (hu_eq : u = q * ((g : ℤ) - 1)) (x : ℝ)
+    (hx : x ∈ (bobStepBall ⟨0.5, 0.5, by norm_num, by norm_num, by norm_num, by norm_num⟩
+      g m hg (gameBallOfIcc 0 1 (by norm_num)) u).toSet) :
+    ∀ (j : ℕ), 1 ≤ j → j ≤ m → baseDigit g j x ≠ 0 := by
+  intro j hj1 hjm
+  have hg_pos : 0 < (g : ℝ) := by linarith [g_real_gt_two g hg]
+  have hg_ge3 : (3 : ℝ) ≤ (g : ℝ) := by exact_mod_cast (show 3 ≤ g by omega)
+
+  -- 1. Unfold bobStepBall and strip the dependent gameBallOfIcc wrapper
+  dsimp [bobStepBall] at hx
+  rw [gameBallOfIcc_toSet] at hx
+
+  -- 2. Collapse branch with if_pos
+  have h_div : (g - 1 : ℤ) ∣ u := ⟨q, by rw [hu_eq, mul_comm]⟩
+  dsimp [bobStepOffset] at hx
+  rw [ite_eq_left h_div] at hx
+
+  -- 3. Extract interval bounds on x
+  rw [Set.mem_Icc] at hx
+  
+  -- Apply digit non-vanishing lemma with an appropriate integer bucket M
+  -- apply baseDigit_ne_zero_of_bounds g hg j hj1 x M ...
+  sorry
+
+/-- Main Digit-Block Invariance: Every point in Bob's step ball avoids zero 
+    across all m digits of the current turn block. -/
+theorem bobStepBall_digit_block_invariance (params : SchmidtParams) (g m : ℕ)
+    (hg : 2 < g) (hm : 3 ≤ m) (A : GameBall ℝ) (u_0 : ℤ) (x : ℝ)
+    (hx : x ∈ (bobStepBall params g m hg A u_0).toSet) :
+    ∀ (j : ℕ), 1 ≤ j → j ≤ m → baseDigit g j x ≠ 0 := by
+  intro j hj1 hjm
+  by_cases h_div : (g - 1 : ℤ) ∣ u_0
+  · obtain ⟨q, hq⟩ := h_div
+    have hu_eq : u_0 = q * ((g : ℤ) - 1) := by rw [hq, mul_comm]
+    exact bob_digits_nonneg_caseA g m hg hm u_0 q hu_eq x hx j hj1 hjm
+  · -- Case (b): (g - 1) ∤ u_0 forces intermediate digits equal to r ∈ {1, ..., g - 2}
+    sorry
+
+/-- Inductive non-vanishing lemma connecting block indices (n * m + j) to the limit point. -/
+theorem baseDigit_ne_zero_of_nested_step (g m : ℕ) (hg : 2 < g) (hm : 3 ≤ m)
+    (params : SchmidtParams) (B_seq : ℕ → GameBall ℝ)
+    (h_step : ∀ n, ∃ u_0, B_seq (n + 1) = bobStepBall params g m hg (gameBallOfIcc 0 1 (by norm_num)) u_0)
+    (x : ℝ) (hx_mem : ∀ n, x ∈ (B_seq n).toSet) :
+    ∀ (k : ℕ), 1 ≤ k → baseDigit g k x ≠ 0 := by
+  intro k hk
+-- Decompose k = n * m + j with 1 ≤ j ≤ m
+  set n := (k - 1) / m
+  set j := (k - 1) % m + 1
+
+  have hm_pos : 0 < m := by omega
+
+  have hj1 : 1 ≤ j := by
+    dsimp [j]
+    omega
+
+  have hjm : j ≤ m := by
+    dsimp [j]
+    have := Nat.mod_lt (k - 1) hm_pos
+    omega
+
+  have hk_eq : k = n * m + j := by
+    dsimp [n, j]
+    have h := Nat.div_add_mod (k - 1) m
+    rw [mul_comm m] at h
+    omega
+  obtain ⟨u_0, hB_succ⟩ := h_step n
+  have hx_in_Bn1 : x ∈ (B_seq (n + 1)).toSet := hx_mem (n + 1)
+  rw [hB_succ] at hx_in_Bn1
+  rw [hk_eq]
+  -- Relate shifted baseDigit to the local block digit
+  sorry
+
+/-! 1. General Digit Extraction from Floor Buckets -/
+
+lemma baseDigit_eq_digit_of_bounds (g : ℕ) (hg : 2 < g) (j : ℕ) (hj : 1 ≤ j)
+    (M : ℤ) (d : ℤ) (hd_pos : 1 ≤ d) (hd_lt : d < (g : ℤ)) (x : ℝ)
+    (h_low : (M : ℝ) / (g : ℝ)^(j - 1) + (d : ℝ) / (g : ℝ)^j ≤ x)
+    (h_high : x < (M : ℝ) / (g : ℝ)^(j - 1) + ((d + 1 : ℤ) : ℝ) / (g : ℝ)^j) :
+    baseDigit g j x = d := by
+  obtain ⟨j', rfl⟩ : ∃ j', j = j' + 1 := Nat.exists_eq_succ_of_ne_zero (by omega)
+  dsimp [baseDigit]
+  have hg_pos : 0 < (g : ℝ) := by positivity
+  have hg_pos' : 0 < (g : ℤ) := by positivity
+  have hgj'_pos : 0 < (g : ℝ)^j' := by positivity
+  have hgj_pos : 0 < (g : ℝ)^(j' + 1) := by positivity
+
+  -- Floor at scale j - 1 (i.e. scale j')
+  have h_floor_prev : ⌊x * (g : ℝ)^j'⌋ = M := by
+    apply Int.floor_eq_iff.mpr
+    constructor
+    · have h_le : (M : ℝ) ≤ (M : ℝ) / (g : ℝ)^j' * (g : ℝ)^j' + (d : ℝ) / (g : ℝ)^(j' + 1) * (g : ℝ)^j' := by
+        have : (d : ℝ) / (g : ℝ)^(j' + 1) * (g : ℝ)^j' = (d : ℝ) / (g : ℝ) := by
+          have : (g : ℝ)^(j' + 1) = (g : ℝ)^j' * (g : ℝ) := by rw [pow_succ]
+          rw [this]
+          field_simp
+        rw [this]
+        have hd_div_pos : 0 ≤ (d : ℝ) / (g : ℝ) := by positivity
+        have : (M : ℝ) / (g : ℝ)^j' * (g : ℝ)^j' = (M : ℝ) := by
+          have : (g : ℝ)^j' ≠ 0 := ne_of_gt hgj'_pos
+          field_simp
+        linarith
+      calc
+        (M : ℝ) ≤ ((M : ℝ) / (g : ℝ)^j' + (d : ℝ) / (g : ℝ)^(j' + 1)) * (g : ℝ)^j' := by
+          have : ((M : ℝ) / (g : ℝ)^j' + (d : ℝ) / (g : ℝ)^(j' + 1)) * (g : ℝ)^j' =
+                 (M : ℝ) / (g : ℝ)^j' * (g : ℝ)^j' + (d : ℝ) / (g : ℝ)^(j' + 1) * (g : ℝ)^j' := by ring
+          rw [this]
+          exact h_le
+        _ ≤ x * (g : ℝ)^j' := mul_le_mul_of_nonneg_right h_low (le_of_lt hgj'_pos)
+    · have h_lt : ((M : ℝ) / (g : ℝ)^j' + ((d + 1 : ℤ) : ℝ) / (g : ℝ)^(j' + 1)) * (g : ℝ)^j' ≤ (M : ℝ) + 1 := by
+        have : ((d + 1 : ℤ) : ℝ) / (g : ℝ)^(j' + 1) * (g : ℝ)^j' = ((d + 1 : ℤ) : ℝ) / (g : ℝ) := by
+          have : (g : ℝ)^(j' + 1) = (g : ℝ)^j' * (g : ℝ) := by rw [pow_succ]
+          rw [this]
+          field_simp
+        have h_frac_le : ((d + 1 : ℤ) : ℝ) / (g : ℝ) ≤ 1 := by
+          rw [div_le_one₀ hg_pos]
+          push_cast
+          sorry
+        have : ((M : ℝ) / (g : ℝ)^j' + ((d + 1 : ℤ) : ℝ) / (g : ℝ)^(j' + 1)) * (g : ℝ)^j' =
+               (M : ℝ) + ((d + 1 : ℤ) : ℝ) / (g : ℝ)^(j' + 1) * (g : ℝ)^j' := by
+          have : (g : ℝ)^j' ≠ 0 := ne_of_gt hgj'_pos
+          field_simp
+        linarith
+      calc
+        x * (g : ℝ)^j' < ((M : ℝ) / (g : ℝ)^j' + ((d + 1 : ℤ) : ℝ) / (g : ℝ)^(j' + 1)) * (g : ℝ)^j' :=
+          (mul_lt_mul_iff_of_pos_right hgj'_pos).mpr h_high
+        _ ≤ (M : ℝ) + 1 := h_lt
+
+  -- Floor at scale j (i.e. scale j' + 1)
+  have h_floor_curr : ⌊x * (g : ℝ)^(j' + 1)⌋ = (g : ℤ) * M + d := by
+    apply Int.floor_eq_iff.mpr
+    push_cast
+    constructor
+    · calc
+        (g : ℝ) * (M : ℝ) + (d : ℝ) =
+          ((M : ℝ) / (g : ℝ)^j' + (d : ℝ) / (g : ℝ)^(j' + 1)) * (g : ℝ)^(j' + 1) := by
+            have : (g : ℝ)^(j' + 1) = (g : ℝ)^j' * (g : ℝ) := by rw [pow_succ]
+            have : (g : ℝ)^j' ≠ 0 := ne_of_gt hgj'_pos
+            have : (g : ℝ) ≠ 0 := ne_of_gt hg_pos
+            field_simp; ring
+        _ ≤ x * (g : ℝ)^(j' + 1) := mul_le_mul_of_nonneg_right h_low (le_of_lt hgj_pos)
+    · calc
+        x * (g : ℝ)^(j' + 1) <
+          ((M : ℝ) / (g : ℝ)^j' + ((d + 1 : ℤ) : ℝ) / (g : ℝ)^(j' + 1)) * (g : ℝ)^(j' + 1) :=
+            (mul_lt_mul_iff_of_pos_right hgj_pos).mpr h_high
+        _ = (g : ℝ) * (M : ℝ) + (d : ℝ) + 1 := by
+            have : (g : ℝ)^(j' + 1) = (g : ℝ)^j' * (g : ℝ) := by rw [pow_succ]
+            have : (g : ℝ)^j' ≠ 0 := ne_of_gt hgj'_pos
+            have : (g : ℝ) ≠ 0 := ne_of_gt hg_pos
+            field_simp
+            sorry
+
+  -- Conclude digit identity
+  rw [h_floor_prev, h_floor_curr]
+  ring
+
+/-! 2. Case (a): Intermediate Digits equal (g - 1) -/
+
+lemma bob_digit_caseA_intermediate (g m : ℕ) (hg : 2 < g) (hm : 3 ≤ m)
+    (u : ℤ) (q : ℤ) (hu_eq : u = q * ((g : ℤ) - 1)) (j : ℕ)
+    (hj_ge : 3 ≤ j) (hj_le : j ≤ m) (x : ℝ)
+    (hx : x ∈ (bobStepBall ⟨0.5, 0.5, by norm_num, by norm_num, by norm_num, by norm_num⟩
+      g m hg (gameBallOfIcc 0 1 (by norm_num)) u).toSet) :
+    baseDigit g j x = (g : ℤ) - 1 := by
+  have hg_pos : 0 < (g : ℝ) := by positivity
+  have hg_ge3 : (3 : ℝ) ≤ (g : ℝ) := by exact_mod_cast (show 3 ≤ g by omega)
+  set d := (g : ℤ) - 1
+  have hd_pos : 1 ≤ d := by dsimp [d]; omega
+  have hd_lt : d < (g : ℤ) := by dsimp [d]; omega
+
+  -- Obtain M from the (j-1)-prefix of y_u - g^(-m)
+  have h_div : (g - 1 : ℤ) ∣ u := ⟨q, by rw [hu_eq, mul_comm]⟩
+  dsimp [bobStepBall, bobStepOffset] at hx
+  sorry
+  --dsimp [bobOffsetCaseA, gameBallOfIcc, GameBall.toSet] at hx
+  --rw [Metric.mem_closedBall, Real.dist_eq, abs_le] at hx
+
+  --set M := ⌊(schmidtGridPoint g u - (g : ℝ)^(-(m : ℤ))) * (g : ℝ)^(j - 1)⌋
+  --have h_bounds :
+  --    (M : ℝ) / (g : ℝ)^(j - 1) + (d : ℝ) / (g : ℝ)^j ≤ x ∧
+  --    x < (M : ℝ) / (g : ℝ)^(j - 1) + ((d + 1 : ℤ) : ℝ) / (g : ℝ)^j := by
+  --  constructor
+  --  · nlinarith [hx.1, schmidtA_lt_schmidtB g hg]
+  --  · nlinarith [hx.2, schmidtB_lt_one g hg]
+
+  --exact baseDigit_eq_digit_of_bounds g hg j (by omega) M d hd_pos hd_lt x h_bounds.1 h_bounds.2
+
+/-! 3. Case (b): Intermediate Digits equal r ∈ {1, ..., g - 2} -/
+
+lemma bob_digit_caseB_intermediate (g m : ℕ) (hg : 2 < g) (hm : 3 ≤ m)
+    (u : ℤ) (q r : ℤ) (hu_eq : u = q * ((g : ℤ) - 1) + r)
+    (hr_pos : 1 ≤ r) (hr_lt : r ≤ (g : ℤ) - 2) (j : ℕ)
+    (hj_ge : 3 ≤ j) (hj_le : j ≤ m) (x : ℝ)
+    (hx : x ∈ (bobStepBall ⟨0.5, 0.5, by norm_num, by norm_num, by norm_num, by norm_num⟩
+      g m hg (gameBallOfIcc 0 1 (by norm_num)) u).toSet) :
+    baseDigit g j x = r := by
+  have hg_pos : 0 < (g : ℝ) := by positivity
+  have h_not_div : ¬ (g - 1 : ℤ) ∣ u := by
+    intro ⟨c, hc⟩
+    have : q * ((g : ℤ) - 1) + r = c * ((g : ℤ) - 1) := by linarith [hu_eq, hc]
+    have : r = (c - q) * ((g : ℤ) - 1) := by linarith
+    have : (g : ℤ) - 1 ∣ r := ⟨c - q, by rw [this, mul_comm]⟩
+    have h_r_bound : 0 < r ∧ r < (g : ℤ) - 1 := by omega
+    sorry
+
+  dsimp [bobStepBall, bobStepOffset] at hx
+  sorry
+  --rw [if_neg h_not_div] at hx
+  --dsimp [bobOffsetCaseB, gameBallOfIcc, GameBall.toSet] at hx
+  --rw [Metric.mem_closedBall, Real.dist_eq, abs_le] at hx
+
+  --set M := ⌊(schmidtGridPoint g u + (g : ℝ)^(-(m : ℤ)) - (g : ℝ)^(-(m : ℤ)) * ((g : ℝ) - 1)⁻¹) * (g : ℝ)^(j - 1)⌋
+  --have hr_lt_g : r < (g : ℤ) := by omega
+  --have h_bounds :
+  --    (M : ℝ) / (g : ℝ)^(j - 1) + (r : ℝ) / (g : ℝ)^j ≤ x ∧
+  --    x < (M : ℝ) / (g : ℝ)^(j - 1) + ((r + 1 : ℤ) : ℝ) / (g : ℝ)^j := by
+  --  constructor
+  --  · nlinarith [hx.1, schmidtA_lt_schmidtB g hg]
+  --  · nlinarith [hx.2, schmidtB_lt_one g hg]
+
+  --exact baseDigit_eq_digit_of_bounds g hg j (by omega) M r hr_pos hr_lt_g x h_bounds.1 h_bounds.2 
 
 /-- Full Theorem 5: The winning dimension of S_g equals α_g = ((g - 1)² + 1)⁻¹. -/
 theorem schmidt_theorem_5_windim (g : ℕ) (hg : 2 < g) :
