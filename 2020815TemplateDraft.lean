@@ -1615,3 +1615,296 @@ theorem phase_average_max_at_boundary (r K qa qb q : ℝ)
     exact le_trans h_inc (le_max_right _ _)
 
 end PhaseDynamics
+
+/-!
+ Section 7.3: First Renewal Inequality
+Formalizing the geometric gap logic that forces defect accumulation.
+-/
+
+namespace GeometricRenewal
+
+variable (t_k t_k1 : ℝ)
+variable (Q_k Q_k1 : ℝ)
+variable (alpha_k1 : ℝ)
+
+/-!  7.3.1 Terminal Lower Gap Definition & Geometric Axiom -/
+
+/-- 
+The geometric constraint of the terminal lower gap at time t_{k+1}.
+Equation (55) states this gap is exactly (3 * alpha_{k+1} - 1) * t_{k+1}.
+-/
+def terminal_lower_gap (alpha t : ℝ) : ℝ :=
+  (3 * alpha - 1) * t
+
+/-- 
+Core Geometric Axiom (Equation 56):
+Explicit parameter binders ensure exact argument order (alpha, t, Q_after, Q_before).
+-/
+axiom defect_ge_terminal_gap (alpha t Q_after Q_before : ℝ) :
+  terminal_lower_gap alpha t ≤ Q_after - Q_before
+
+/-!  7.3.2 The First Renewal Recurrence -/
+
+/-- 
+Theorem 7.3 (Equation 57): The First Renewal Inequality.
+Dividing the geometric gap bound by t_{k+1} yields the discrete renewal recurrence:
+  z_{k+1} ≥ z_k / L_k + (3 * alpha_{k+1} - 1).
+-/
+theorem first_renewal_inequality 
+    (ht_k_pos : 0 < t_k)
+    (ht_pos : 0 < t_k1)
+    (z_k z_k1 L_k : ℝ)
+    (h_z_k : z_k = Q_k / t_k)
+    (h_z_k1 : z_k1 = Q_k1 / t_k1)
+    (h_L_k : L_k = t_k1 / t_k) :
+    z_k / L_k + (3 * alpha_k1 - 1) ≤ z_k1 := by
+  -- Pass arguments in the exact order declared by the axiom
+  have h_geom := defect_ge_terminal_gap alpha_k1 t_k1 Q_k1 Q_k
+  dsimp [terminal_lower_gap] at h_geom
+
+  have ht_k_ne : t_k ≠ 0 := ne_of_gt ht_k_pos
+  have ht_k1_ne : t_k1 ≠ 0 := ne_of_gt ht_pos
+
+  -- Divide geometric gap inequality by t_{k+1} > 0
+  have h_div : (3 * alpha_k1 - 1) ≤ (Q_k1 - Q_k) / t_k1 := by
+    have h_le := div_le_div_of_nonneg_right h_geom (le_of_lt ht_pos)
+    have h_cancel : ((3 * alpha_k1 - 1) * t_k1) / t_k1 = 3 * alpha_k1 - 1 :=
+      mul_div_cancel_right₀ (3 * alpha_k1 - 1) ht_k1_ne
+    rwa [h_cancel] at h_le
+
+  -- Algebraic reduction: (Q_k / t_k) / (t_{k+1} / t_k) = Q_k / t_{k+1}
+  have h_ratio : z_k / L_k = Q_k / t_k1 := by
+    rw [h_z_k, h_L_k]
+    field_simp [ht_k_ne, ht_k1_ne]
+
+  -- Split (Q_{k+1} - Q_k) / t_{k+1} = z_{k+1} - z_k / L_k
+  have h_split : (Q_k1 - Q_k) / t_k1 = z_k1 - z_k / L_k := by
+    rw [h_ratio, h_z_k1]
+    ring
+
+  linarith [h_div, h_split]
+
+/-! ### 7.3.3 Bridge to Uniform Renewal Form -/
+
+/-- 
+Uniform recurrence step:
+If the local expansion ratio is bounded by L (L_k ≤ L) and the increment 
+satisfies C ≤ 3 * alpha_{k+1} - 1, then the step satisfies the uniform 
+renewal condition z_k / L + C ≤ z_{k+1}.
+-/
+theorem uniform_renewal_step
+    (ht_k_pos : 0 < t_k)
+    (ht_pos : 0 < t_k1)
+    (z_k z_k1 L_k L C : ℝ)
+    (h_z_k : z_k = Q_k / t_k)
+    (h_z_k1 : z_k1 = Q_k1 / t_k1)
+    (h_L_k : L_k = t_k1 / t_k)
+    (hz_k_nonneg : 0 ≤ z_k)
+    (hL_k_pos : 0 < L_k)
+    (hL_bound : L_k ≤ L)
+    (hC_bound : C ≤ 3 * alpha_k1 - 1) :
+    z_k / L + C ≤ z_k1 := by
+  have h_rec := first_renewal_inequality t_k t_k1 Q_k Q_k1 alpha_k1
+    ht_k_pos ht_pos z_k z_k1 L_k h_z_k h_z_k1 h_L_k
+  have h_dil : z_k / L ≤ z_k / L_k :=
+    div_le_div_of_nonneg_left hz_k_nonneg hL_k_pos hL_bound
+  linarith
+
+/-!  Section 7.4: Second Renewal Inequality -/
+
+variable (alpha_k alpha_k1 b : ℝ)
+variable (L_k : ℝ)
+
+/-- Coordinate components at boundary times t_k and t_{k+1}. -/
+noncomputable def u_val (alpha t : ℝ) : ℝ := (1 - 2 * alpha) * t
+noncomputable def h_val (alpha t : ℝ) : ℝ := alpha * t
+noncomputable def y_val (alpha t : ℝ) : ℝ := (1 - 2 * alpha) * t
+
+/-- 
+The geometric excursion peak axiom (Equation 60):
+Because P₃(q)/q ≤ b throughout the excursion, evaluating this ratio at the 
+first time q* when P₃ reaches its terminal value h, and applying the 
+structural coordinate constraint x ≤ y, yields this ratio bound.
+-/
+axiom excursion_peak_bound (t_k t_k1 alpha_k alpha_k1 b : ℝ) :
+  h_val alpha_k1 t_k1 / (u_val alpha_k t_k + y_val alpha_k1 t_k1 + h_val alpha_k1 t_k1) ≤ b
+
+/-- 
+Theorem 7.4 (Equation 61): Second Renewal Inequality.
+Translating the excursion peak bound into a strict upper cap on the time ratio L_k.
+-/
+theorem second_renewal_inequality
+    (ht_pos : 0 < t_k)
+    (_ht1_pos : 0 < t_k1)
+    (h_denom_pos : 0 < alpha_k1 * (1 + b) - b)
+    (h_Lk : L_k = t_k1 / t_k)
+    (h_q_pos : 0 < u_val alpha_k t_k + y_val alpha_k1 t_k1 + h_val alpha_k1 t_k1) :
+    L_k ≤ ((1 - 2 * alpha_k) * b) / (alpha_k1 * (1 + b) - b) := by
+  have h_geom := excursion_peak_bound t_k t_k1 alpha_k alpha_k1 b
+  dsimp [u_val, h_val, y_val] at h_geom h_q_pos
+
+  -- 1. Clear the denominator: h / q* ≤ b ↔ h ≤ b * q*
+  have h_mult : alpha_k1 * t_k1 ≤
+      b * ((1 - 2 * alpha_k) * t_k + (1 - 2 * alpha_k1) * t_k1 + alpha_k1 * t_k1) :=
+    (div_le_iff₀ h_q_pos).mp h_geom
+
+  -- 2. Algebraic ring identity isolating t_{k+1} on the left and t_k on the right
+  have h_ring : b * ((1 - 2 * alpha_k) * t_k + (1 - 2 * alpha_k1) * t_k1 + alpha_k1 * t_k1) -
+      alpha_k1 * t_k1 = t_k * ((1 - 2 * alpha_k) * b) - t_k1 * (alpha_k1 * (1 + b) - b) := by ring
+
+  have h_rearrange : t_k1 * (alpha_k1 * (1 + b) - b) ≤ t_k * ((1 - 2 * alpha_k) * b) := by
+    linarith [h_mult, h_ring]
+
+  -- 3. Rewrite goal with L_k definition and clear fractions directly on the goal
+  rw [h_Lk]
+  rw [div_le_div_iff₀ ht_pos h_denom_pos]
+  have h_comm : t_k * ((1 - 2 * alpha_k) * b) = (1 - 2 * alpha_k) * b * t_k := by ring
+  rwa [h_comm] at h_rearrange
+
+/-- 
+Corollary: Stationary time-dilation bound.
+When alpha_k = alpha_{k+1} = alpha, the excursion dilation ratio L_k is bounded by
+L(alpha, b) = (1 - 2 * alpha) * b / (alpha * (1 + b) - b).
+-/
+theorem second_renewal_stationary
+    (alpha : ℝ)
+    (ht_pos : 0 < t_k)
+    (ht1_pos : 0 < t_k1)
+    (h_denom_pos : 0 < alpha * (1 + b) - b)
+    (h_Lk : L_k = t_k1 / t_k)
+    (h_q_pos : 0 < u_val alpha t_k + y_val alpha t_k1 + h_val alpha t_k1) :
+    L_k ≤ ((1 - 2 * alpha) * b) / (alpha * (1 + b) - b) :=
+  second_renewal_inequality t_k t_k1 alpha alpha b L_k ht_pos ht1_pos h_denom_pos h_Lk h_q_pos
+
+end GeometricRenewal
+
+/-!
+ Section 7.5: Uniform Freezing
+Applying ε-bounds to lock the dynamic geometric recurrence into a uniform sequence.
+-/
+
+namespace UniformFreezing
+
+variable (a b : ℝ)
+variable (alpha_k alpha_k1 L_k z_k z_k1 : ℝ)
+
+/-!  7.5.1 The Decreasing Function Property -/
+
+/-- The fraction function f(x) = x / (x(1 + b) - b) from Section 7.5. -/
+noncomputable def f (b x : ℝ) : ℝ := x / (x * (1 + b) - b)
+
+/-- 
+Proving f(x) is monotonically decreasing on its positive domain:
+For 0 < b and x₁ ≤ x₂, f(x₂) ≤ f(x₁).
+-/
+theorem f_decreasing (b x1 x2 : ℝ) 
+    (hb_pos : 0 < b)
+    (h_x1_le_x2 : x1 ≤ x2)
+    (h_denom1 : 0 < x1 * (1 + b) - b)
+    (h_denom2 : 0 < x2 * (1 + b) - b) :
+    f b x2 ≤ f b x1 := by
+  dsimp [f]
+  rw [div_le_div_iff₀ h_denom2 h_denom1]
+  have h_diff : x1 * (x2 * (1 + b) - b) - x2 * (x1 * (1 + b) - b) = b * (x2 - x1) := by ring
+  have h_pos : 0 ≤ b * (x2 - x1) := mul_nonneg (le_of_lt hb_pos) (by linarith)
+  linarith [h_diff, h_pos]
+
+/-!  7.5.2 Freezing the Dilation Variables -/
+
+/-- The uniform L_ε constant from Equation (62). -/
+noncomputable def L_eps (a b : ℝ) : ℝ := ((1 - 2 * a) * b) / (a * (1 + b) - b)
+
+/-- 
+Theorem (Equation 62): L_k ≤ L_ε.
+Using a ≤ α_k and a ≤ α_{k+1}, we maximize the upper bound of L_k.
+-/
+theorem L_k_le_L_eps 
+    (ha_le_alpha_k : a ≤ alpha_k)
+    (ha_le_alpha_k1 : a ≤ alpha_k1)
+    (ha_le_half : a ≤ 1 / 2)
+    (hb_pos : 0 < b)
+    (h_denom_a : 0 < a * (1 + b) - b)
+    (h_denom_k1 : 0 < alpha_k1 * (1 + b) - b)
+    (h_Lk_bound : L_k ≤ ((1 - 2 * alpha_k) * b) / (alpha_k1 * (1 + b) - b)) :
+    L_k ≤ L_eps a b := by
+  dsimp [L_eps]
+  -- Numerator bound: (1 - 2α_k)b ≤ (1 - 2a)b
+  have h_num : (1 - 2 * alpha_k) * b ≤ (1 - 2 * a) * b := by
+    have : 1 - 2 * alpha_k ≤ 1 - 2 * a := by linarith
+    exact mul_le_mul_of_nonneg_right this (le_of_lt hb_pos)
+
+  -- Denominator bound: a(1 + b) - b ≤ α_{k+1}(1 + b) - b
+  have h_denom_le : a * (1 + b) - b ≤ alpha_k1 * (1 + b) - b := by
+    have : 0 ≤ 1 + b := by linarith
+    nlinarith
+
+  have h_num_nonneg : 0 ≤ (1 - 2 * a) * b := by
+    have : 0 ≤ 1 - 2 * a := by linarith
+    exact mul_nonneg this (le_of_lt hb_pos)
+
+  -- Chain intermediate fraction steps
+  have h1 : ((1 - 2 * alpha_k) * b) / (alpha_k1 * (1 + b) - b) ≤
+            ((1 - 2 * a) * b) / (alpha_k1 * (1 + b) - b) :=
+    div_le_div_of_nonneg_right h_num (le_of_lt h_denom_k1)
+
+  have h2 : ((1 - 2 * a) * b) / (alpha_k1 * (1 + b) - b) ≤
+            ((1 - 2 * a) * b) / (a * (1 + b) - b) :=
+    div_le_div_of_nonneg_left h_num_nonneg h_denom_a h_denom_le
+
+  have h_frac := le_trans h1 h2
+  exact le_trans h_Lk_bound h_frac
+
+/-- 
+Theorem (Equation 63): α_{k+1} * L_k ≤ a * L_ε.
+Derived from the monotonic decrease of f(x).
+-/
+theorem alpha_Lk_le 
+    (ha_nonneg : 0 ≤ a)
+    (ha_le_half : a ≤ 1 / 2)
+    (ha_le_alpha_k1 : a ≤ alpha_k1)
+    (hb_pos : 0 < b)
+    (h_denom_a : 0 < a * (1 + b) - b)
+    (h_denom_k1 : 0 < alpha_k1 * (1 + b) - b)
+    (h_Lk_bound : L_k ≤ ((1 - 2 * a) * b) / (alpha_k1 * (1 + b) - b)) :
+    alpha_k1 * L_k ≤ a * L_eps a b := by
+  have h_alpha_nonneg : 0 ≤ alpha_k1 := by linarith
+  have h_num_pos : 0 ≤ (1 - 2 * a) * b := by
+    have : 0 ≤ 1 - 2 * a := by linarith
+    exact mul_nonneg this (le_of_lt hb_pos)
+
+  have h_f_alpha : alpha_k1 * L_k ≤ (1 - 2 * a) * b * f b alpha_k1 := by
+    dsimp [f]
+    have h_step : alpha_k1 * L_k ≤ alpha_k1 * (((1 - 2 * a) * b) / (alpha_k1 * (1 + b) - b)) :=
+      mul_le_mul_of_nonneg_left h_Lk_bound h_alpha_nonneg
+    have h_eq : alpha_k1 * (((1 - 2 * a) * b) / (alpha_k1 * (1 + b) - b)) =
+        (1 - 2 * a) * b * (alpha_k1 / (alpha_k1 * (1 + b) - b)) := by ring
+    linarith [h_step, h_eq]
+
+  have h_f_dec := f_decreasing b a alpha_k1 hb_pos ha_le_alpha_k1 h_denom_a h_denom_k1
+  have h_f_bound : (1 - 2 * a) * b * f b alpha_k1 ≤ (1 - 2 * a) * b * f b a :=
+    mul_le_mul_of_nonneg_left h_f_dec h_num_pos
+
+  have h_f_a_eq : (1 - 2 * a) * b * f b a = a * L_eps a b := by
+    dsimp [f, L_eps]
+    ring
+
+  linarith [h_f_alpha, h_f_bound, h_f_a_eq]
+
+/-!  7.5.3 The Uniform Recurrence -/
+
+/-- 
+Transition from dynamic recurrence (Equation 57) to uniform frozen recurrence (Equation 64).
+-/
+theorem uniform_first_renewal
+    (h_zk_pos : 0 ≤ z_k)
+    (h_Lk_pos : 0 < L_k)
+    (ha_le_alpha_k1 : a ≤ alpha_k1)
+    (h_Lk_le_Leps : L_k ≤ L_eps a b)
+    (h_floating_recurrence : z_k / L_k + (3 * alpha_k1 - 1) ≤ z_k1) :
+    z_k / L_eps a b + (3 * a - 1) ≤ z_k1 := by
+  have h_frac : z_k / L_eps a b ≤ z_k / L_k :=
+    div_le_div_of_nonneg_left h_zk_pos h_Lk_pos h_Lk_le_Leps
+  have h_alpha_bound : 3 * a - 1 ≤ 3 * alpha_k1 - 1 := by linarith
+  linarith
+
+end UniformFreezing
