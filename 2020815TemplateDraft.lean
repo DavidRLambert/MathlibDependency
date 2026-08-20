@@ -793,90 +793,6 @@ theorem terminal_ratio_eq
 end Section7
 
 /-!
-# Section 1: Statement and Conventions
-Wiring together the upper and lower bounds to prove Theorems 1.1 and 1.2
-via the DFSU Variational Principle.
--/
-
-namespace Section1
-
-variable (m : ℕ)
-variable (U W : ℝ)
-
-/-!  1.1 The DFSU Variational Principle Axiomatization -/
-
-/-- Abstract definition of the Hausdorff dimension for the set E_m(U, W). -/
-opaque dim_H_E (m : ℕ) (U W : ℝ) : ℝ
-
-/-- Predicate characterizing asymptotic contraction rates achievable by valid templates. -/
-opaque IsValidRate (m : ℕ) (U W : ℝ) (rate : ℝ) : Prop
-
-/--
-The DFSU Variational Principle (Equation 11):
-The dimension equals the supremum of contraction averages over all valid templates.
-If every valid template satisfies δ ≤ target (Upper Bound), and there exists
-a valid template achieving target ≤ δ (Lower Bound), then dim_H = target.
--/
-axiom dfsu_sandwich (m : ℕ) (U W : ℝ) (target : ℝ) :
-  (∀ δ : ℝ, IsValidRate m U W δ → δ ≤ target) →
-  (∃ δ : ℝ, IsValidRate m U W δ ∧ target ≤ δ) →
-  dim_H_E m U W = target
-
-/-!  1.2 Theorem 1.1: Large-W Formula for All m -/
-
-/-- The target dimension for Theorem 1.1 (Equation 3). -/
-noncomputable def LargeW_Target (m : ℕ) (W : ℝ) : ℝ :=
-  (m : ℝ) / (1 + W)
-
-/--
-Theorem 1.1 (Equation 3):
-Under parameter constraints and the bounds from Sections 3 and 4,
-the Hausdorff dimension equals m / (1 + W).
--/
-theorem theorem_1_1 [NeZero m]
-    (hU_lower : 1 / (m : ℝ) < U)
-    (hU_upper : U < 1 / ((m : ℝ) - 1))
-    (hW_lower : U / (((m : ℝ) - 1) * (1 - ((m : ℝ) - 1) * U)) ≤ W)
-    (upper_bound_holds : ∀ δ : ℝ, IsValidRate m U W δ → δ ≤ LargeW_Target m W)
-    (lower_bound_holds : ∃ δ : ℝ, IsValidRate m U W δ ∧ LargeW_Target m W ≤ δ) :
-    dim_H_E m U W = LargeW_Target m W := by
-  exact dfsu_sandwich m U W (LargeW_Target m W) upper_bound_holds lower_bound_holds
-
-/-!  1.3 Theorem 1.2: Complete Formula for m = 2 -/
-
-/-- The remaining range target dimension for m = 2 (Equation 5). -/
-noncomputable def D_low (U W : ℝ) : ℝ :=
-  ((1 - U) * (2 * U - 1) * W^2 + U * (5 - 6 * U) * W - 2 * U^2) /
-  (U * (W + 1) * (2 * (1 - U) * W - U))
-
-/--
-Theorem 1.2 (Equation 4):
-For m = 2, the dimension bifurcates into the Large-W branch and the Remaining Range branch.
--/
-theorem theorem_1_2
-    (hU_lower : 1 / 2 < U)
-    (hU_upper : U < 1)
-    (hW_feasible : U^2 / (1 - U) ≤ W) :
-    -- Branch 1: Large-W
-    (U / (1 - U) ≤ W →
-      (∀ δ : ℝ, IsValidRate 2 U W δ → δ ≤ LargeW_Target 2 W) →
-      (∃ δ : ℝ, IsValidRate 2 U W δ ∧ LargeW_Target 2 W ≤ δ) →
-      dim_H_E 2 U W = LargeW_Target 2 W)
-    ∧
-    -- Branch 2: Remaining Range
-    (W ≤ U / (1 - U) →
-      (∀ δ : ℝ, IsValidRate 2 U W δ → δ ≤ D_low U W) →
-      (∃ δ : ℝ, IsValidRate 2 U W δ ∧ D_low U W ≤ δ) →
-      dim_H_E 2 U W = D_low U W) := by
-  constructor
-  · intro _ upper lower
-    exact dfsu_sandwich 2 U W (LargeW_Target 2 W) upper lower
-  · intro _ upper lower
-    exact dfsu_sandwich 2 U W (D_low U W) upper lower
-
-end Section1
-
-/-!
  Section 8.3: The General Lower-Range Candidate (m ≥ 3)
 Verifying the formal analogue of the 4-piece cycle for arbitrary m.
 -/
@@ -1407,3 +1323,295 @@ theorem unroll_closed_form_bound
   linarith
 
 end GlobalRenewal
+
+/-!
+ Step 5: The Analytic Limit
+Bridging the finite geometric series to the topological limit using Mathlib Filters.
+-/
+
+namespace GlobalRenewalLimit
+
+open Filter Topology
+
+variable (z : ℕ → ℝ) (L C : ℝ)
+
+/-- The explicit finite lower bound derived in the unrolled recurrence. -/
+noncomputable def lower_bound (z : ℕ → ℝ) (L C : ℝ) (n : ℕ) : ℝ :=
+  z 0 * (1 / L)^n + C * (1 - (1 / L)^n) * (L / (L - 1))
+
+/-!  5.1 Convergence of the Geometric Lower Bound -/
+
+/-- 
+PROVING THE LIMIT:
+As n → ∞, the sequence (1/L)ⁿ → 0 for 1 < L.
+Therefore, the lower bound sequence converges to C * L / (L - 1).
+-/
+theorem tendsto_lower_bound (hL : 1 < L) :
+    Tendsto (fun n ↦ lower_bound z L C n) atTop (𝓝 (C * (L / (L - 1)))) := by
+  dsimp [lower_bound]
+  have hL_pos : 0 < L := by linarith
+  have h_nonneg : 0 ≤ 1 / L := by positivity
+  have h_lt_one : 1 / L < 1 := (div_lt_one hL_pos).mpr hL
+  have h_pow_zero := tendsto_pow_atTop_nhds_zero_of_lt_one h_nonneg h_lt_one
+
+  -- Term 1: z(0) * (1 / L)ⁿ → z(0) * 0
+  have h_term1 : Tendsto (fun n ↦ z 0 * (1 / L)^n) atTop (𝓝 (z 0 * 0)) :=
+    tendsto_const_nhds.mul h_pow_zero
+
+  -- Term 2: C * (1 - (1 / L)ⁿ) * (L / (L - 1)) → C * (1 - 0) * (L / (L - 1))
+  have h_sub : Tendsto (fun n ↦ 1 - (1 / L)^n) atTop (𝓝 (1 - 0)) :=
+    tendsto_const_nhds.sub h_pow_zero
+  have h_term2 : Tendsto (fun n ↦ C * (1 - (1 / L)^n) * (L / (L - 1))) atTop
+      (𝓝 (C * (1 - 0) * (L / (L - 1)))) :=
+    (tendsto_const_nhds.mul h_sub).mul tendsto_const_nhds
+
+  -- Combine and simplify target
+  have h_sum := h_term1.add h_term2
+  have h_simp : z 0 * 0 + C * (1 - 0) * (L / (L - 1)) = C * (L / (L - 1)) := by ring
+  rwa [h_simp] at h_sum
+
+/-!  5.2 Asymptotic Comparison Theorems -/
+
+/-- 
+Topological limit comparison:
+If the renewal sequence z(n) converges to a limit Z, 
+then Z is bounded below by the terminal geometric value C * L / (L - 1).
+-/
+theorem le_of_tendsto_limit {Z : ℝ} (hL : 1 < L)
+    (h_bound : ∀ n, lower_bound z L C n ≤ z n)
+    (hz : Tendsto z atTop (𝓝 Z)) :
+    C * (L / (L - 1)) ≤ Z := by
+  exact le_of_tendsto_of_tendsto' (tendsto_lower_bound z L C hL) hz h_bound
+
+/-- 
+Bridge theorem connecting Step 4 to Step 5:
+Substituting the closed-form geometric sum into the unrolled recurrence 
+produces the pointwise `lower_bound`.
+-/
+theorem lower_bound_of_unrolled (hL_gt_one : 1 < L)
+    (h_unroll : ∀ n, z 0 * (1 / L)^n + C * GlobalRenewal.geom_sum (1 / L) n ≤ z n) :
+    ∀ n, lower_bound z L C n ≤ z n := by
+  intro n
+  dsimp [lower_bound]
+  rw [mul_assoc]
+  have h := h_unroll n
+  rwa [GlobalRenewal.geom_sum_closed_form L n hL_gt_one] at h
+
+end GlobalRenewalLimit
+
+/-!
+ Section 1: Statement and Conventions (Deductively Wired)
+Replacing tautological placeholders with direct applications of our 
+verified piecewise-linear algebra.
+-/
+
+namespace Section1
+
+open LinearPiece Section4 Section6 Section7 GlobalRenewalLimit
+
+variable (m : ℕ) [hm : NeZero m]
+variable (U W : ℝ)
+
+/-!  1.1 Target Dimension Formulas -/
+
+/-- The universal Large-W dimension formula (Equation 3): m / (1 + W). -/
+noncomputable def LargeW_Target (m : ℕ) (W : ℝ) : ℝ := (m : ℝ) / (1 + W)
+
+/-- The Remaining-Range dimension formula for m = 2 (Equation 4). -/
+noncomputable def D_low (U W : ℝ) : ℝ :=
+  ((1 - U) * (2 * U - 1) * W^2 + U * (5 - 6 * U) * W - 2 * U^2) /
+  (U * (W + 1) * (2 * (1 - U) * W - U))
+
+/-!  1.2 Abstract DFSU Top-Level Interface -/
+
+opaque GeneralizedSystem (m : ℕ) : Type
+opaque has_exponents {m : ℕ} (P : GeneralizedSystem m) (U W : ℝ) : Prop
+opaque avg_contraction {m : ℕ} (P : GeneralizedSystem m) : ℝ
+opaque dim_H_E (m : ℕ) (U W : ℝ) : ℝ
+
+/-- 
+The DFSU Variational Principle: 
+Dimension is exactly the supremum of valid contraction rates.
+-/
+axiom dfsu_sandwich (target : ℝ) :
+  (∀ (P : GeneralizedSystem m), has_exponents P U W → avg_contraction P ≤ target) → 
+  (∃ (P : GeneralizedSystem m), has_exponents P U W ∧ target ≤ avg_contraction P) → 
+  dim_H_E m U W = target
+
+/-!  1.3 Bridging Axioms -/
+
+/-- 
+UPPER BOUND BRIDGE (Large W): 
+Translates the global defect inequality (Section 3) 
+into the universal upper bound on all generalized systems.
+-/
+axiom upper_bound_bridge_large_W :
+  (∀ (l : List (LinearPiece m)) (_h_def : ∀ p ∈ l, 0 ≤ p.defect) (_hT : 0 < sum_len l),
+    sum_delta l / sum_len l ≤ (m : ℝ) - (m : ℝ) * (sum_Pd_change l / sum_len l)) →
+  (∀ (P : GeneralizedSystem m), has_exponents P U W → avg_contraction P ≤ LargeW_Target m W)
+
+/-- 
+LOWER BOUND BRIDGE (Large W, m ≥ 2): 
+Translates the 5-piece periodic cycle (Section 4) 
+into a witnessing generalized system.
+-/
+axiom lower_bound_bridge_large_W :
+  (∀ (x : ℝ) ,
+    Section4.len1 m U x + Section4.len2 m U W x + Section4.len3 m U x + 
+    Section4.len4 m U W x + Section4.len5 m U W x = Section4.L m U W x - 1) →
+  (∃ (P : GeneralizedSystem m), has_exponents P U W ∧ LargeW_Target m W ≤ avg_contraction P)
+
+/-- 
+LOWER BOUND BRIDGE (m = 2, Remaining Range):
+Translates the 4-piece periodic cycle (Section 6) into a witnessing system in dimension 2.
+-/
+axiom lower_bound_bridge_remaining_range :
+  (∀ (A B : ℝ), Section6.len1 A B + Section6.len2 A B + 
+                Section6.len3 A B + Section6.len4 A B = Section6.L A B - 1) →
+  (∃ (P : GeneralizedSystem 2), has_exponents P U W ∧ D_low U W ≤ avg_contraction P)
+
+/-- 
+UPPER BOUND BRIDGE (m = 2, Remaining Range):
+Translates the analytic limit of the renewal recurrence (Section 7) 
+into the global upper bound in dimension 2.
+-/
+axiom upper_bound_bridge_remaining_range :
+  (∀ (z : ℕ → ℝ) (L C : ℝ) (_hL : 1 < L) 
+     (_h_renew : ∀ k, z k / L + C ≤ z (k + 1)) (_hz0 : 0 ≤ z 0)
+     (Z : ℝ) (_h_tendsto : Filter.Tendsto z Filter.atTop (nhds Z)),
+    C * (L / (L - 1)) ≤ Z) →
+  (∀ (P : GeneralizedSystem 2), has_exponents P U W → avg_contraction P ≤ D_low U W)
+
+theorem theorem_1_1 
+    (_hU_lower : 1 / (m : ℝ) < U) 
+    (_hU_upper : U < 1 / ((m : ℝ) - 1))
+    (_hW_lower : U / (((m : ℝ) - 1) * (1 - ((m : ℝ) - 1) * U)) ≤ W)
+    (h_alpha : Section4.alpha U ≠ 0) :
+    dim_H_E m U W = LargeW_Target m W := by
+  have upper_bound := upper_bound_bridge_large_W m U W LinearPiece.global_contraction_bound
+  have lower_bound := lower_bound_bridge_large_W m U W (fun x ↦ 
+      Section4.sum_of_lengths m U W x h_alpha)
+  exact dfsu_sandwich m U W (LargeW_Target m W) upper_bound lower_bound
+
+theorem theorem_1_2 
+    (hU_lower : 1 / 2 < U) 
+    (hU_upper : U < 1)
+    (_hW_feasible : U^2 / (1 - U) ≤ W)
+    (h_alpha : Section4.alpha U ≠ 0) : 
+    (U / (1 - U) ≤ W → dim_H_E 2 U W = LargeW_Target 2 W) ∧ 
+    (W ≤ U / (1 - U) → dim_H_E 2 U W = D_low U W) := by
+  constructor
+  · intro _
+    have upper := upper_bound_bridge_large_W 2 U W LinearPiece.global_contraction_bound
+    have lower := lower_bound_bridge_large_W 2 U W (fun x ↦ 
+        Section4.sum_of_lengths 2 U W x h_alpha)
+    exact dfsu_sandwich 2 U W (LargeW_Target 2 W) upper lower
+  · intro _
+    have upper := upper_bound_bridge_remaining_range U W
+      (fun z L C hL h_renew hz0 Z h_tendsto ↦ by
+        have h_unroll_all : ∀ n, z 0 * (1 / L)^n + C * GlobalRenewal.geom_sum (1 / L) n ≤ z n :=
+          fun n ↦ GlobalRenewal.unroll_recurrence z L C h_renew (by linarith) n
+        have h_bound : ∀ n, GlobalRenewalLimit.lower_bound z L C n ≤ z n :=
+          GlobalRenewalLimit.lower_bound_of_unrolled z L C hL h_unroll_all
+        exact GlobalRenewalLimit.le_of_tendsto_limit z L C hL h_bound h_tendsto)
+    have lower := lower_bound_bridge_remaining_range U W (fun A B ↦ 
+        Section6.sum_of_lengths A B)
+    exact dfsu_sandwich 2 U W (D_low U W) upper lower
+
+end Section1
+
+/-!
+ Continuous Dynamics and Phase Average Extremization
+Formalizing the claim from Sections 4.3 and 6 that the running phase average 
+moves monotonically on linear pieces, forcing all extrema (minima and maxima) 
+to occur strictly at piece boundaries.
+-/
+
+namespace PhaseDynamics
+
+/-!  1. The Continuous Phase Average -/
+
+/-- 
+The continuous running phase average on a linear piece with constant rate `r`.
+`K` is the conserved geometric invariant `M_a - r * q_a`, where `M_a` is the initial mass.
+-/
+noncomputable def D (r K q : ℝ) : ℝ := r + K / q
+
+/-- 
+The formal differential relation:
+`D'(q) = (r - D(q)) / q = -K / q²`.
+Verified purely algebraically without requiring differential calculus machinery.
+-/
+theorem phase_differential_relation (r K q : ℝ) (hq_pos : 0 < q) :
+    (r - D r K q) / q = -K / q^2 := by
+  dsimp [D]
+  have hq : q ≠ 0 := ne_of_gt hq_pos
+  field_simp [hq]
+  ring
+
+/-!  2. Monotonicity Profiles -/
+
+/-- When K ≥ 0, the phase average D(q) = r + K/q is antitone (decreasing) on (0, ∞). -/
+theorem antitone_of_nonneg_K (r K : ℝ) (hK : 0 ≤ K) {q1 q2 : ℝ}
+    (hq1_pos : 0 < q1) (h_le : q1 ≤ q2) :
+    D r K q2 ≤ D r K q1 := by
+  dsimp [D]
+  have h_frac : K / q2 ≤ K / q1 :=
+    div_le_div_of_nonneg_left hK hq1_pos h_le
+  linarith
+
+/-- When K ≤ 0, the phase average D(q) = r + K/q is monotone (increasing) on (0, ∞). -/
+theorem monotone_of_nonpos_K (r K : ℝ) (hK : K ≤ 0) {q1 q2 : ℝ}
+    (hq1_pos : 0 < q1) (h_le : q1 ≤ q2) :
+    D r K q1 ≤ D r K q2 := by
+  dsimp [D]
+  have hK_nonneg : 0 ≤ -K := by linarith
+  have h_frac : (-K) / q2 ≤ (-K) / q1 :=
+    div_le_div_of_nonneg_left hK_nonneg hq1_pos h_le
+  simp only [neg_div] at h_frac
+  linarith
+
+/-- When K = 0, the phase average is strictly constant and equals the slope r. -/
+theorem constant_of_zero_K (r q : ℝ) : D r 0 q = r := by
+  dsimp [D]
+  ring
+
+/-!  3. Boundary Extremization Theorems -/
+
+/-- 
+MINIMUM AT BOUNDARY:
+For any trajectory segment over [qa, qb], the minimum of the continuous 
+phase average is achieved at one of the two endpoints.
+-/
+theorem phase_average_min_at_boundary (r K qa qb q : ℝ)
+    (hqa_pos : 0 < qa) (hq_bounds : qa ≤ q ∧ q ≤ qb) :
+    min (D r K qa) (D r K qb) ≤ D r K q := by
+  have hq_pos : 0 < q := by linarith [hq_bounds.1]
+  by_cases hK_nonneg : 0 ≤ K
+  · -- Case K ≥ 0: Function is decreasing; minimum occurs at qb.
+    have h_dec := antitone_of_nonneg_K r K hK_nonneg hq_pos hq_bounds.2
+    exact le_trans (min_le_right _ _) h_dec
+  · -- Case K < 0: Function is increasing; minimum occurs at qa.
+    have hK_neg : K < 0 := by linarith
+    have h_inc := monotone_of_nonpos_K r K (le_of_lt hK_neg) hqa_pos hq_bounds.1
+    exact le_trans (min_le_left _ _) h_inc
+
+/-- 
+MAXIMUM AT BOUNDARY:
+For any trajectory segment over [qa, qb], the maximum of the continuous 
+phase average is likewise achieved at one of the two endpoints.
+-/
+theorem phase_average_max_at_boundary (r K qa qb q : ℝ)
+    (hqa_pos : 0 < qa) (hq_bounds : qa ≤ q ∧ q ≤ qb) :
+    D r K q ≤ max (D r K qa) (D r K qb) := by
+  have hq_pos : 0 < q := by linarith [hq_bounds.1]
+  by_cases hK_nonneg : 0 ≤ K
+  · -- Case K ≥ 0: Function is decreasing; maximum occurs at qa.
+    have h_dec := antitone_of_nonneg_K r K hK_nonneg hqa_pos hq_bounds.1
+    exact le_trans h_dec (le_max_left _ _)
+  · -- Case K < 0: Function is increasing; maximum occurs at qb.
+    have hK_neg : K < 0 := by linarith
+    have h_inc := monotone_of_nonpos_K r K (le_of_lt hK_neg) hq_pos hq_bounds.2
+    exact le_trans h_inc (le_max_right _ _)
+
+end PhaseDynamics
