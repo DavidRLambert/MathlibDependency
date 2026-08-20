@@ -112,6 +112,141 @@ theorem pointwise_id : b.delta = (m : ℝ) - (m : ℝ) * b.P'_d - b.defect := by
   dsimp [defect]
   ring
 
+/-!
+ Step 1 & 2: Enumerating and Classifying Moving Blocks
+Characterizing exactly which [r, s] configurations yield e = 0 and e > 0.
+-/
+
+variable {m : ℕ} [NeZero m] (b : MovingBlock m)
+
+/-!  Defining the Taxonomy -/
+
+/-- A 'Good' block is one where the defect evaluates exactly to 0. -/
+def IsGoodBlock : Prop := b.defect = 0
+
+/-- A 'Bad' block is one where the defect is strictly positive. -/
+def IsBadBlock : Prop := 0 < b.defect
+
+/-- Completeness: Every valid block is either Good (e = 0) or Bad (e > 0). -/
+theorem good_or_bad : IsGoodBlock b ∨ IsBadBlock b := by
+  dsimp [IsGoodBlock, IsBadBlock]
+  by_cases h : b.defect = 0
+  · exact Or.inl h
+  · exact Or.inr (lt_of_le_of_ne b.defect_nonneg (Ne.symm h))
+
+/-!  Classifying Interior Blocks (s < m + 1) -/
+
+/-- 
+CLASS 1 (Interior Good Blocks): 
+For any block strictly below the top boundary, it has zero defect 
+if and only if it starts at r = 1.
+Examples: [1, 1], [1, 2], ..., [1, m].
+-/
+theorem good_interior_iff (h : b.s < m + 1) : 
+    IsGoodBlock b ↔ b.r = 1 := by
+  dsimp [IsGoodBlock]
+  rw [defect_of_s_lt_d b h]
+  constructor
+  · intro heq
+    have : (b.r : ℝ) = 1 := by linarith
+    exact_mod_cast this
+  · intro hr
+    rw [hr]
+    ring
+
+/-- 
+CLASS 2 (Interior Bad Blocks):
+Any interior block starting at r ≥ 2 is strictly defective.
+Examples for m ≥ 3: [2, 2], [2, 3], [3, 3], etc.
+-/
+theorem bad_interior_iff (h : b.s < m + 1) : 
+    IsBadBlock b ↔ 2 ≤ b.r := by
+  dsimp [IsBadBlock]
+  rw [defect_of_s_lt_d b h]
+  constructor
+  · intro h_pos
+    have : 1 < b.r := by
+      have : (1 : ℝ) < (b.r : ℝ) := by linarith
+      exact_mod_cast this
+    exact this
+  · intro hr
+    have : (2 : ℝ) ≤ (b.r : ℝ) := by exact_mod_cast hr
+    linarith
+
+/-! Classifying Top-Boundary Blocks (s = m + 1) -/
+
+/-- 
+CLASS 3 (Top Good Blocks):
+For blocks touching the top boundary, the defect is e = (k-1)(m-k)/k.
+Because 1 ≤ k ≤ m, it is zero if and only if k = 1 or k = m:
+- k = 1: [m+1, m+1] (the zero-rate piece)
+- k = m: [2, m+1] (the piece pulling the top coordinate)
+-/
+theorem good_top_iff (h : b.s = m + 1) : 
+    IsGoodBlock b ↔ b.k = 1 ∨ b.k = (m : ℝ) := by
+  dsimp [IsGoodBlock]
+  rw [defect_of_s_eq_d b h]
+  have hk_pos : 0 < b.k := by 
+    dsimp [k]
+    have : (b.r : ℝ) ≤ (b.s : ℝ) := Nat.cast_le.mpr b.r_le_s
+    linarith
+  constructor
+  · intro heq
+    have h_num : (b.k - 1) * ((m : ℝ) - b.k) = 0 := by
+      exact (div_eq_zero_iff.mp heq).resolve_right (ne_of_gt hk_pos)
+    cases mul_eq_zero.mp h_num with
+    | inl h1 => left; linarith
+    | inr h2 => right; linarith
+  · intro h_or
+    cases h_or with
+    | inl hk1 =>
+      rw [hk1, sub_self, zero_mul, zero_div]
+    | inr hkm =>
+      rw [hkm, sub_self, mul_zero, zero_div]
+
+/-- 
+CLASS 4 (Top Bad Blocks):
+Any top-boundary block with 1 < k < m is strictly defective.
+These are the partial-contact blocks that arise when m ≥ 3.
+-/
+theorem bad_top_iff (h : b.s = m + 1) : 
+    IsBadBlock b ↔ 1 < b.k ∧ b.k < (m : ℝ) := by
+  dsimp [IsBadBlock]
+  rw [defect_of_s_eq_d b h]
+  have hr_le_s : (b.r : ℝ) ≤ (b.s : ℝ) := Nat.cast_le.mpr b.r_le_s
+  have hk1_nonneg : 0 ≤ b.k - 1 := by
+    dsimp [k]
+    linarith
+  have hk_pos : 0 < b.k := by 
+    dsimp [k]
+    linarith
+  have hkm_nonneg : 0 ≤ (m : ℝ) - b.k := by
+    have h_len : ((b.s - b.r + 1 : ℕ) : ℝ) ≤ (m : ℝ) := Nat.cast_le.mpr (b.block_len_le h)
+    rw [Nat.cast_add, Nat.cast_one, Nat.cast_sub b.r_le_s] at h_len
+    dsimp [k]
+    linarith
+  constructor
+  · intro h_pos
+    have h_num_pos : 0 < (b.k - 1) * ((m : ℝ) - b.k) := 
+      (div_pos_iff_of_pos_right hk_pos).mp h_pos
+    have hk1_pos : 0 < b.k - 1 := by
+      rcases hk1_nonneg.lt_or_eq with hlt | heq
+      · exact hlt
+      · exfalso
+        rw [← heq, zero_mul] at h_num_pos
+        exact lt_irrefl 0 h_num_pos
+    have hkm_pos : 0 < (m : ℝ) - b.k := by
+      rcases hkm_nonneg.lt_or_eq with hlt | heq
+      · exact hlt
+      · exfalso
+        rw [← heq, mul_zero] at h_num_pos
+        exact lt_irrefl 0 h_num_pos
+    exact ⟨by linarith, by linarith⟩
+  · intro ⟨hk1, hkm⟩
+    have h1 : 0 < b.k - 1 := by linarith
+    have h2 : 0 < (m : ℝ) - b.k := by linarith
+    exact div_pos (mul_pos h1 h2) hk_pos
+
 end MovingBlock
 
 /-!
@@ -920,3 +1055,355 @@ theorem average_rate_iff_minimal_defect (h_T_pos : 0 < sum_len s.l_orig) :
 end Surgery
 
 end LocalSurgery
+
+/-!
+ Step 4: Macroscopic Time-Shifting Surgery (m = 3)
+Proving that routing around a partial contact using extreme boundaries 
+strictly improves the contraction mass.
+-/
+
+namespace MacroscopicSurgery
+
+open LinearPiece
+open LocalSurgery
+
+variable (T : ℝ) (hT : 0 ≤ T) (hT_pos : 0 < T)
+
+/-!  4.1 The Original Bad Trajectory -/
+
+/-- 
+The bad piece representing the [3, 4] partial-contact block.
+Runs for time T with top slope 1/2 and defect 1/2.
+-/
+noncomputable def piece_bad (T : ℝ) (hT : 0 ≤ T) : LinearPiece 3 where
+  qa := 0
+  qb := T
+  h_qa_le_qb := hT
+  delta := 1
+  Pd_slope := 1 / 2
+  defect := 1 / 2
+  pointwise_id := by norm_num
+  Pd_qa := 0
+  Pd_qb := T / 2
+  Pd_linear := by ring
+
+/-- The baseline trajectory using only the bad block. -/
+noncomputable def path_bad (T : ℝ) (hT : 0 ≤ T) : List (LinearPiece 3) := [piece_bad T hT]
+
+/-!  4.2 The Proposed Surgery (Time-Shifting) -/
+
+/-- 
+Phase 1: The [4, 4] runaway block. 
+Runs for time T / 4 with top slope 1 and defect 0.
+-/
+noncomputable def piece_good1 (T : ℝ) (hT : 0 ≤ T) : LinearPiece 3 where
+  qa := 0
+  qb := T / 4
+  h_qa_le_qb := by linarith [hT]
+  delta := 0
+  Pd_slope := 1
+  defect := 0
+  pointwise_id := by norm_num
+  Pd_qa := 0
+  Pd_qb := T / 4
+  Pd_linear := by ring
+
+/-- 
+Phase 2: The [2, 4] catch-up block. 
+Runs for time 3T / 4 with top slope 1/3 and defect 0.
+-/
+noncomputable def piece_good2 (T : ℝ) (hT : 0 ≤ T) : LinearPiece 3 where
+  qa := T / 4
+  qb := T
+  h_qa_le_qb := by linarith [hT]
+  delta := 2
+  Pd_slope := 1 / 3
+  defect := 0
+  pointwise_id := by norm_num
+  Pd_qa := T / 4
+  Pd_qb := T / 2
+  Pd_linear := by ring
+
+/-- The replacement trajectory bypassing the partial contact. -/
+noncomputable def path_good (T : ℝ) (hT : 0 ≤ T) : List (LinearPiece 3) := 
+  [piece_good1 T hT, piece_good2 T hT]
+
+/-- Continuity check: the good pieces meet smoothly at transition point q = T/4. -/
+theorem path_good_contiguous : IsContiguous (path_good T hT) := by
+  dsimp [path_good, IsContiguous, piece_good1, piece_good2]
+  exact ⟨rfl, rfl, trivial⟩
+
+/-!  4.3 Boundary Conservation Constraints -/
+
+/-- Constraint 1: Total duration is conserved and equals T. -/
+theorem same_duration (T : ℝ) (hT : 0 ≤ T) :
+    sum_len (path_bad T hT) = sum_len (path_good T hT) := by
+  dsimp [path_good, path_bad, sum_len, piece_good1, piece_good2, piece_bad]
+  ring
+
+/-- Constraint 2: Total displacement ΔP_d is conserved and equals T / 2. -/
+theorem same_Pd_change (T : ℝ) (hT : 0 ≤ T) :
+    sum_Pd_change (path_bad T hT) = sum_Pd_change (path_good T hT) := by
+  dsimp [path_good, path_bad, sum_Pd_change, piece_good1, piece_good2, piece_bad]
+  ring
+
+/-- Formal `Surgery 3` package linking the bad and good paths. -/
+noncomputable def macroscopicSurgery (T : ℝ) (hT : 0 ≤ T) : Surgery 3 where
+  l_orig := path_bad T hT
+  l_pert := path_good T hT
+  same_duration := same_duration T hT
+  same_Pd_displacement := same_Pd_change T hT
+
+/-!  4.4 Mass Evaluations & Variational Payoff -/
+
+theorem path_bad_delta : sum_delta (path_bad T hT) = T := by
+  dsimp [path_bad, sum_delta, piece_bad]
+  ring
+
+theorem path_good_delta : sum_delta (path_good T hT) = (3 / 2) * T := by
+  dsimp [path_good, sum_delta, piece_good1, piece_good2]
+  ring
+
+theorem path_bad_defect : sum_defect (path_bad T hT) = T / 2 := by
+  dsimp [path_bad, sum_defect, piece_bad]
+  ring
+
+theorem path_good_defect : sum_defect (path_good T hT) = 0 := by
+  dsimp [path_good, sum_defect, piece_good1, piece_good2]
+  ring
+
+/-- The surgery strictly eliminates the accumulated defect (from T/2 down to 0). -/
+theorem defect_eliminated (T : ℝ) (hT : 0 ≤ T) (hT_pos : 0 < T) :
+    sum_defect (path_good T hT) < sum_defect (path_bad T hT) := by
+  rw [path_good_defect, path_bad_defect]
+  linarith [hT_pos]
+
+/-- Defect exchange identity verified via the general Surgery framework. -/
+theorem surgery_exchange_verified :
+    sum_delta (path_good T hT) - sum_delta (path_bad T hT) =
+    sum_defect (path_bad T hT) - sum_defect (path_good T hT) :=
+  (macroscopicSurgery T hT).delta_exchange
+
+/-- The total contraction mass strictly increases from 1.0 * T to 1.5 * T. -/
+theorem contraction_mass_increased (T : ℝ) (hT : 0 ≤ T) (hT_pos : 0 < T) :
+    sum_delta (path_bad T hT) < sum_delta (path_good T hT) := by
+  rw [path_bad_delta, path_good_delta]
+  linarith [hT_pos]
+
+/-- The average contraction rate strictly increases from 1 to 3/2. -/
+theorem contraction_rate_increased (hT_pos : 0 < T) :
+    sum_delta (path_bad T hT) / sum_len (path_bad T hT) <
+    sum_delta (path_good T hT) / sum_len (path_good T hT) := by
+  have h_len_bad : sum_len (path_bad T hT) = T := by
+    dsimp [path_bad, sum_len, piece_bad]
+    ring
+  have h_len_good : sum_len (path_good T hT) = T := by
+    dsimp [path_good, sum_len, piece_good1, piece_good2]
+    ring
+  rw [path_bad_delta, path_good_delta, h_len_bad, h_len_good]
+  rw [div_self (ne_of_gt hT_pos)]
+  have h_good_div : (3 / 2 * T) / T = 3 / 2 := by
+    exact mul_div_cancel_right₀ (3 / 2) (ne_of_gt hT_pos)
+  rw [h_good_div]
+  norm_num
+
+end MacroscopicSurgery
+
+/-!
+ Step 3: The Gap Capacity Lemma
+Proving that boundary blocks are the unique optimal vehicles for top-coordinate growth.
+-/
+
+namespace GapCapacity
+
+variable (m : ℕ) [hm : Fact (3 ≤ m)]
+variable (k : ℝ)
+
+/-- The defect generated per unit of top-coordinate displacement: e / P'_d. -/
+noncomputable def defect_per_Pd_growth (m : ℕ) (k : ℝ) : ℝ :=
+  (((k - 1) * ((m : ℝ) - k)) / k) / (1 / k)
+
+/-!  3.1 The Parabolic Cost Formula -/
+
+/-- 
+THE GAP CAPACITY LEMMA:
+For any block that moves the top coordinate (where 1 ≤ k ≤ m), 
+the defect cost per unit distance is EXACTLY (k - 1)(m - k).
+-/
+theorem defect_cost_is_parabolic (hk_pos : 0 < k) :
+    defect_per_Pd_growth m k = (k - 1) * ((m : ℝ) - k) := by
+  dsimp [defect_per_Pd_growth]
+  have hk : k ≠ 0 := ne_of_gt hk_pos
+  field_simp [hk]
+
+/-- The defect cost per unit growth is zero if and only if k = 1 or k = m. -/
+theorem defect_cost_zero_iff (hk_pos : 0 < k) :
+    defect_per_Pd_growth m k = 0 ↔ k = 1 ∨ k = (m : ℝ) := by
+  rw [defect_cost_is_parabolic m k hk_pos]
+  have : (k - 1) * ((m : ℝ) - k) = 0 ↔ k - 1 = 0 ∨ (m : ℝ) - k = 0 := mul_eq_zero
+  rw [this]
+  constructor
+  · rintro (h1 | h2)
+    · left; linarith
+    · right; linarith
+  · rintro (h1 | h2)
+    · left; linarith
+    · right; linarith
+
+/-! 3.2 Suboptimality of Partial Contacts -/
+
+/-- 
+Among all non-singleton blocks (1 < k ≤ m), the boundary block k = m 
+is the UNIQUE vehicle with zero defect cost.
+-/
+theorem unique_zero_defect_of_gt_one (hk_gt_1 : 1 < k) :
+    defect_per_Pd_growth m k = 0 ↔ k = (m : ℝ) := by
+  have hk_pos : 0 < k := by linarith
+  rw [defect_cost_zero_iff m k hk_pos]
+  constructor
+  · rintro (h1 | h2)
+    · linarith
+    · exact h2
+  · intro h
+    exact Or.inr h
+
+/-- 
+Strict Inefficiency of Partial Contacts:
+Any partial contact block with 1 < k < m incurs a strictly positive defect penalty.
+-/
+theorem partial_contacts_strictly_suboptimal (hk_pos : 0 < k) :
+    (1 < k → k < (m : ℝ) → 0 < defect_per_Pd_growth m k) ∧
+    (1 ≤ k → k ≤ (m : ℝ) → 0 ≤ defect_per_Pd_growth m k) := by
+  constructor
+  · intro hk1 hkm
+    rw [defect_cost_is_parabolic m k hk_pos]
+    have h1 : 0 < k - 1 := by linarith
+    have h2 : 0 < (m : ℝ) - k := by linarith
+    exact mul_pos h1 h2
+  · intro hk1 hkm
+    rw [defect_cost_is_parabolic m k hk_pos]
+    have h1 : 0 ≤ k - 1 := by linarith
+    have h2 : 0 ≤ (m : ℝ) - k := by linarith
+    exact mul_nonneg h1 h2
+
+/-- Dimension constraint helper: m ≥ 3 implies 1 < m. -/
+theorem one_lt_m : 1 < (m : ℝ) := by
+  have hm3 : (3 : ℝ) ≤ (m : ℝ) := by exact_mod_cast hm.out
+  linarith
+
+end GapCapacity
+
+/-!
+ Step 4: Telescoping the Global Limit
+Formalizing the discrete renewal recurrence and its geometric series bound.
+-/
+
+namespace GlobalRenewal
+
+variable (z : ℕ → ℝ)
+variable (L C : ℝ)
+
+/-!  4.1 The Discrete Renewal Sequence -/
+
+/-- 
+The generalized renewal inequality derived from macroscopic excursions:
+Each excursion dilates time by L and adds a strict defect cost C.
+-/
+def ObeysRenewal : Prop :=
+  ∀ k, z k / L + C ≤ z (k + 1)
+
+/-- 
+Horner-form recursive definition of the geometric series: 1 + r + r² + ... + rⁿ⁻¹.
+This formulation aligns directly with recurrence unrolling under multiplication.
+-/
+def geom_sum (r : ℝ) : ℕ → ℝ
+  | 0 => 0
+  | n + 1 => geom_sum r n * r + 1
+
+/-!  4.2 Finite Unrolling -/
+
+/-- 
+Expanding the recurrence n times yields the geometric series 
+lower bound for the accumulated quantity z(n).
+-/
+theorem unroll_recurrence (h_renew : ObeysRenewal z L C) (hL_pos : 0 < L) (n : ℕ) :
+    z 0 * (1 / L)^n + C * geom_sum (1 / L) n ≤ z n := by
+  induction n with
+  | zero =>
+    dsimp [geom_sum]
+    ring_nf
+    linarith
+  | succ n ih =>
+    have hn := h_renew n
+    dsimp [geom_sum]
+    have h_nonneg : 0 ≤ 1 / L := by positivity
+    have ih_div : (z 0 * (1 / L)^n + C * geom_sum (1 / L) n) * (1 / L) ≤ z n * (1 / L) :=
+      mul_le_mul_of_nonneg_right ih h_nonneg
+    have h_div_eq : z n / L = z n * (1 / L) := by ring
+    calc
+      z 0 * (1 / L)^(n + 1) + C * (geom_sum (1 / L) n * (1 / L) + 1)
+         = (z 0 * (1 / L)^n + C * geom_sum (1 / L) n) * (1 / L) + C := by ring
+      _ ≤ z n * (1 / L) + C := by linarith [ih_div]
+      _ = z n / L + C := by rw [h_div_eq]
+      _ ≤ z (n + 1) := hn
+
+/-!  4.3 Closed-Form Algebraic Target -/
+
+/-- The fundamental polynomial cancellation: (∑ rⁱ) * (1 - r) = 1 - rⁿ. -/
+lemma geom_sum_mul_one_sub (r : ℝ) (n : ℕ) :
+    geom_sum r n * (1 - r) = 1 - r^n := by
+  induction n with
+  | zero =>
+    dsimp [geom_sum]
+    ring
+  | succ n ih =>
+    dsimp [geom_sum]
+    calc (geom_sum r n * r + 1) * (1 - r)
+      _ = (geom_sum r n * (1 - r)) * r + (1 - r) := by ring
+      _ = (1 - r^n) * r + (1 - r)                 := by rw [ih]
+      _ = 1 - r^(n + 1)                          := by ring
+
+/-- 
+The standard closed-form identity for the geometric series:
+For L > 1, ∑_{i=0}^{n-1} (1/L)ⁱ = (1 - (1/L)ⁿ) * (L / (L - 1)).
+-/
+theorem geom_sum_closed_form (n : ℕ) (hL_gt_one : 1 < L) :
+    geom_sum (1 / L) n = (1 - (1 / L)^n) * (L / (L - 1)) := by
+  have hL0 : 0 < L := by linarith
+  have hL_ne : L ≠ 0 := ne_of_gt hL0
+  have hLm1 : L - 1 ≠ 0 := by linarith
+  have h_denom : 1 - 1 / L ≠ 0 := by
+    have : 1 - 1 / L = (L - 1) / L := by
+      field_simp [hL_ne]
+    rw [this]
+    exact div_ne_zero hLm1 hL_ne
+
+  have h_id := geom_sum_mul_one_sub (1 / L) n
+  have h_div : geom_sum (1 / L) n = (1 - (1 / L)^n) / (1 - 1 / L) :=
+    (eq_div_iff h_denom).mpr h_id
+  have h_frac : 1 / (1 - 1 / L) = L / (L - 1) := by
+    field_simp [hL_ne, hLm1]
+
+  calc geom_sum (1 / L) n
+    _ = (1 - (1 / L)^n) / (1 - 1 / L)        := h_div
+    _ = (1 - (1 / L)^n) * (1 / (1 - 1 / L))  := by ring
+    _ = (1 - (1 / L)^n) * (L / (L - 1))      := by rw [h_frac]
+
+/-- 
+The terminal asymptotic lower bound (Equation 65):
+For any trajectory with non-negative baseline z(0) ≥ 0 and positive increment C ≥ 0,
+the renewal recurrence is bounded below by the scaled geometric series limit.
+-/
+theorem unroll_closed_form_bound
+    (h_renew : ObeysRenewal z L C)
+    (hL_gt_one : 1 < L)
+    (hz0 : 0 ≤ z 0)
+    (n : ℕ) :
+    C * (1 - (1 / L)^n) * (L / (L - 1)) ≤ z n := by
+  have hL0 : 0 < L := by linarith
+  have h_unroll := unroll_recurrence z L C h_renew hL0 n
+  rw [geom_sum_closed_form L n hL_gt_one] at h_unroll
+  have h_init : 0 ≤ z 0 * (1 / L)^n := by positivity
+  linarith
+
+end GlobalRenewal
