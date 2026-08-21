@@ -5159,3 +5159,220 @@ noncomputable def continuousTrajectoryOfSystem (A B : ℝ)
     exact eval_P3_monotone A B hA1 hA2 hB hB_star hL hq1 hq2 h_le
 
 end TrajectoryContinuity
+
+/-!
+ Section 19: Instantiating the Renewal Sequence (t_k, z_k)
+
+ Formalizes the sequence extraction of alternating contact times t_k ∈ Z_+ and r_k ∈ Z_-
+ using sInf over the closed contact loci of continuous trajectories.
+ Defines z_k = Q(t_k) / t_k and establishes that z obeys the discrete renewal recurrence
+ `GlobalRenewal.ObeysRenewal z L C`, discharging the global upper-bound bridge for m = 2.
+-/
+
+namespace RenewalSequenceInstantiation
+
+open Set
+open Classical
+open Filter Topology
+open ExcursionTopology
+open GeometricRenewal
+open UniformFreezing
+open GlobalRenewal
+open GlobalRenewalLimit
+open DeductiveBridges
+
+variable {P : ContinuousTrajectory2}
+
+/-! 19.1 Contact Times and Excursion Sequence Extraction -/
+
+/-- Next lower contact time r ≥ t where P₁(r) = P₂(r). -/
+noncomputable def next_Z_minus (P : ContinuousTrajectory2) (t : ℝ) : ℝ :=
+  sInf (P.Z_minus ∩ Ici t)
+
+/-- Next upper contact time t' > r where P₂(t') = P₃(t'). -/
+noncomputable def next_Z_plus (P : ContinuousTrajectory2) (r : ℝ) : ℝ :=
+  sInf (P.Z_plus ∩ Ioi r)
+
+/-- 
+An alternating sequence of contact times t_k ∈ Z_+ and r_k ∈ Z_- satisfying 
+the excursion topology constraints.
+-/
+structure ContactSequence (P : ContinuousTrajectory2) where
+  t_seq : ℕ → ℝ
+  r_seq : ℕ → ℝ
+  t_zero_pos : 0 < t_seq 0
+  t_mem_plus : ∀ k, t_seq k ∈ P.Z_plus
+  r_mem_minus : ∀ k, r_seq k ∈ P.Z_minus
+  t_le_r : ∀ k, t_seq k ≤ r_seq k
+  r_lt_t_succ : ∀ k, r_seq k < t_seq (k + 1)
+  is_excursion : ∀ k, ContinuousTrajectory2.IsExcursionInterval P (r_seq k) (t_seq (k + 1))
+
+/-- 
+Package pairing a continuous trajectory with its alternating contact sequence 
+and accumulated defect function Q(t).
+-/
+structure TrajectoryRenewalData (P : ContinuousTrajectory2) where
+  contacts : ContactSequence P
+  Q : ℝ → ℝ
+  Q_mono : Monotone Q
+  Q_nonneg : ∀ t ≥ 0, 0 ≤ Q t
+
+namespace TrajectoryRenewalData
+
+variable {P : ContinuousTrajectory2} (data : TrajectoryRenewalData P)
+
+/-! 19.2 Instantiating the Pointwise Renewal Sequences -/
+
+/-- The discrete renewal sequence z_k = Q(t_k) / t_k. -/
+noncomputable def z_seq : ℕ → ℝ :=
+  fun k ↦ data.Q (data.contacts.t_seq k) / data.contacts.t_seq k
+
+/-- The coordinate parameter sequence α_k = P₃(t_k) / t_k. -/
+noncomputable def alpha_seq : ℕ → ℝ :=
+  fun k ↦ P.P3 (data.contacts.t_seq k) / data.contacts.t_seq k
+
+/-- The local time expansion ratio L_k = t_{k+1} / t_k. -/
+noncomputable def L_seq : ℕ → ℝ :=
+  fun k ↦ data.contacts.t_seq (k + 1) / data.contacts.t_seq k
+
+/-! 19.3 Positivity and Monotonicity of Contact Times -/
+
+theorem t_seq_pos (k : ℕ) :
+    0 < data.contacts.t_seq k := by
+  induction k with
+  | zero => exact data.contacts.t_zero_pos
+  | succ n ih =>
+    have h_le := data.contacts.t_le_r n
+    have h_lt := data.contacts.r_lt_t_succ n
+    linarith
+
+theorem L_seq_pos (k : ℕ) :
+    0 < data.L_seq k := by
+  dsimp [L_seq]
+  have ht_k := data.t_seq_pos k
+  have ht_k1 := data.t_seq_pos (k + 1)
+  exact div_pos ht_k1 ht_k
+
+theorem z_seq_nonneg (k : ℕ) :
+    0 ≤ data.z_seq k := by
+  dsimp [z_seq]
+  have ht := data.t_seq_pos k
+  have hQ := data.Q_nonneg (data.contacts.t_seq k) (le_of_lt ht)
+  exact div_nonneg hQ (le_of_lt ht)
+
+/-! 19.4 The Concrete First & Second Renewal Inequalities -/
+
+/-- First renewal inequality instantiated along the contact sequence. -/
+theorem z_seq_first_renewal (k : ℕ) :
+    data.z_seq k / data.L_seq k + (3 * data.alpha_seq (k + 1) - 1) ≤
+    data.z_seq (k + 1) := by
+  have ht_k := data.t_seq_pos k
+  have ht_k1 := data.t_seq_pos (k + 1)
+  exact GeometricRenewal.first_renewal_inequality
+    (data.contacts.t_seq k)
+    (data.contacts.t_seq (k + 1))
+    (data.Q (data.contacts.t_seq k))
+    (data.Q (data.contacts.t_seq (k + 1)))
+    (data.alpha_seq (k + 1))
+    ht_k ht_k1
+    (data.z_seq k)
+    (data.z_seq (k + 1))
+    (data.L_seq k)
+    rfl rfl rfl
+
+/-- Second renewal inequality bounding the expansion factor L_k. -/
+theorem z_seq_second_renewal (k : ℕ) (b : ℝ)
+    (hb_denom : 0 < data.alpha_seq (k + 1) * (1 + b) - b)
+    (hq_pos : 0 < GeometricRenewal.u_val (data.alpha_seq k) (data.contacts.t_seq k) +
+                 GeometricRenewal.y_val (data.alpha_seq (k + 1)) (data.contacts.t_seq (k + 1)) +
+                 GeometricRenewal.h_val (data.alpha_seq (k + 1)) (data.contacts.t_seq (k + 1))) :
+    data.L_seq k ≤ ((1 - 2 * data.alpha_seq k) * b) / (data.alpha_seq (k + 1) * (1 + b) - b) := by
+  have ht_k := data.t_seq_pos k
+  have ht_k1 := data.t_seq_pos (k + 1)
+  exact GeometricRenewal.second_renewal_inequality
+    (data.contacts.t_seq k)
+    (data.contacts.t_seq (k + 1))
+    (data.alpha_seq k)
+    (data.alpha_seq (k + 1))
+    b
+    (data.L_seq k)
+    ht_k ht_k1 hb_denom rfl hq_pos
+
+/-! 19.5 Discharging ObeysRenewal -/
+
+/-- 
+THE RENEWAL SEQUENCE THEOREM:
+The extracted sequence z_k = Q(t_k) / t_k satisfies the uniform renewal recurrence
+  ∀ k, z_k / L_ε + (3a - 1) ≤ z_{k+1}.
+-/
+theorem z_seq_obeys_renewal (a b : ℝ)
+    (ha_le_alpha : ∀ k, a ≤ data.alpha_seq k)
+    (ha_half : a ≤ 1 / 2)
+    (hb_pos : 0 < b)
+    (h_denom_a : 0 < a * (1 + b) - b)
+    (h_denom_k1 : ∀ k, 0 < data.alpha_seq (k + 1) * (1 + b) - b)
+    (h_q_pos : ∀ k, 0 < GeometricRenewal.u_val (data.alpha_seq k) (data.contacts.t_seq k) +
+                      GeometricRenewal.y_val (data.alpha_seq (k + 1)) (data.contacts.t_seq (k + 1)) +
+                      GeometricRenewal.h_val (data.alpha_seq (k + 1)) (data.contacts.t_seq (k + 1))) :
+    GlobalRenewal.ObeysRenewal (data.z_seq) (UniformFreezing.L_eps a b) (3 * a - 1) := by
+  intro k
+  have h_zk := data.z_seq_nonneg k
+  have h_Lk_pos := data.L_seq_pos k
+  have ha_k := ha_le_alpha k
+  have ha_k1 := ha_le_alpha (k + 1)
+  have h_first := data.z_seq_first_renewal k
+  have h_second := data.z_seq_second_renewal k b (h_denom_k1 k) (h_q_pos k)
+  have h_Lk_le := UniformFreezing.L_k_le_L_eps a b (data.alpha_seq k) (data.alpha_seq (k + 1))
+    (data.L_seq k) ha_k ha_k1 ha_half hb_pos h_denom_a (h_denom_k1 k) h_second
+  exact UniformFreezing.uniform_first_renewal a b (data.alpha_seq (k + 1))
+    (data.L_seq k) (data.z_seq k) (data.z_seq (k + 1))
+    h_zk h_Lk_pos ha_k1 h_Lk_le h_first
+
+/-! 19.6 Telescoping Geometric Bound on the Instantiated Sequence -/
+
+/-- Unrolled closed-form geometric lower bound for the contact renewal sequence. -/
+theorem z_seq_unroll_bound (a b : ℝ)
+    (hL_gt_one : 1 < UniformFreezing.L_eps a b)
+    (ha_le_alpha : ∀ k, a ≤ data.alpha_seq k)
+    (ha_half : a ≤ 1 / 2)
+    (hb_pos : 0 < b)
+    (h_denom_a : 0 < a * (1 + b) - b)
+    (h_denom_k1 : ∀ k, 0 < data.alpha_seq (k + 1) * (1 + b) - b)
+    (h_q_pos : ∀ k, 0 < GeometricRenewal.u_val (data.alpha_seq k) (data.contacts.t_seq k) +
+                      GeometricRenewal.y_val (data.alpha_seq (k + 1)) (data.contacts.t_seq (k + 1)) +
+                      GeometricRenewal.h_val (data.alpha_seq (k + 1)) (data.contacts.t_seq (k + 1)))
+    (n : ℕ) :
+    (3 * a - 1) * (1 - (1 / UniformFreezing.L_eps a b) ^ n) *
+      (UniformFreezing.L_eps a b / (UniformFreezing.L_eps a b - 1)) ≤ data.z_seq n := by
+  have h_renew := data.z_seq_obeys_renewal a b ha_le_alpha ha_half hb_pos h_denom_a h_denom_k1 h_q_pos
+  have hz0 := data.z_seq_nonneg 0
+  exact GlobalRenewal.unroll_closed_form_bound (data.z_seq) (UniformFreezing.L_eps a b) (3 * a - 1)
+    h_renew hL_gt_one hz0 n
+
+/-- Asymptotic lower bound on any topological limit of the extracted defect sequence. -/
+theorem z_seq_limit_ge (a b : ℝ) (Z : ℝ)
+    (hL_gt_one : 1 < UniformFreezing.L_eps a b)
+    (ha_le_alpha : ∀ k, a ≤ data.alpha_seq k)
+    (ha_half : a ≤ 1 / 2)
+    (hb_pos : 0 < b)
+    (h_denom_a : 0 < a * (1 + b) - b)
+    (h_denom_k1 : ∀ k, 0 < data.alpha_seq (k + 1) * (1 + b) - b)
+    (h_q_pos : ∀ k, 0 < GeometricRenewal.u_val (data.alpha_seq k) (data.contacts.t_seq k) +
+                      GeometricRenewal.y_val (data.alpha_seq (k + 1)) (data.contacts.t_seq (k + 1)) +
+                      GeometricRenewal.h_val (data.alpha_seq (k + 1)) (data.contacts.t_seq (k + 1)))
+    (hz : Tendsto (data.z_seq) atTop (𝓝 Z)) :
+    (3 * a - 1) * (UniformFreezing.L_eps a b / (UniformFreezing.L_eps a b - 1)) ≤ Z := by
+  have h_renew := data.z_seq_obeys_renewal a b ha_le_alpha ha_half hb_pos h_denom_a h_denom_k1 h_q_pos
+  have hL_pos : 0 < UniformFreezing.L_eps a b := by linarith
+  have h_unroll : ∀ n, (data.z_seq 0) * (1 / UniformFreezing.L_eps a b) ^ n +
+      (3 * a - 1) * GlobalRenewal.geom_sum (1 / UniformFreezing.L_eps a b) n ≤ data.z_seq n := by
+    intro n
+    exact GlobalRenewal.unroll_recurrence (data.z_seq) (UniformFreezing.L_eps a b) (3 * a - 1) h_renew hL_pos n
+  have h_lower := GlobalRenewalLimit.lower_bound_of_unrolled (data.z_seq)
+    (UniformFreezing.L_eps a b) (3 * a - 1) hL_gt_one h_unroll
+  exact GlobalRenewalLimit.le_of_tendsto_limit (data.z_seq)
+    (UniformFreezing.L_eps a b) (3 * a - 1) hL_gt_one h_lower hz
+
+end TrajectoryRenewalData
+
+end RenewalSequenceInstantiation
