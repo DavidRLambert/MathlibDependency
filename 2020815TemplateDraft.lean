@@ -5376,3 +5376,297 @@ theorem z_seq_limit_ge (a b : ℝ) (Z : ℝ)
 end TrajectoryRenewalData
 
 end RenewalSequenceInstantiation
+
+/-!
+ Section 20: Normal Form Integration for m ≥ 3
+ Wiring the trajectory patching algorithm into the universal variational supremum.
+ Formally justifies reducing the search space to full-contact boundary blocks for m ≥ 3.
+-/
+
+namespace NormalFormIntegration
+
+open Set
+open LinearPiece
+open TrajectoryNormalForm
+open DeductiveBridges
+open UnifiedTheorems
+
+variable {m : ℕ}
+
+/-!  20.1 Classified Generalized Systems -/
+
+/-- 
+A `ClassifiedSystem` wraps a periodic sequence of classified moving pieces.
+Each piece is classified into interior, full singleton $[d,d]$, full boundary $[2,d]$, 
+or partial contact ($1 < k < m$).
+-/
+structure ClassifiedSystem (m : ℕ) where
+  period : List (ClassifiedPiece m)
+  h_len_pos : 0 < sum_len (period.map ClassifiedPiece.toPiece)
+  h_defect_nonneg : ∀ p ∈ period.map ClassifiedPiece.toPiece, 0 ≤ (p : LinearPiece m).defect
+
+/-- Coercion from a `ClassifiedSystem` to a standard `GeneralizedSystem`. -/
+def toGeneralizedSystem (P : ClassifiedSystem m) : GeneralizedSystem m where
+  period := P.period.map ClassifiedPiece.toPiece
+  h_len_pos := P.h_len_pos
+  h_defect_nonneg := P.h_defect_nonneg
+
+/-!  20.2 Defect Nonnegativity and System Patching -/
+
+/-- Defect nonnegativity is preserved across individual patched pieces. -/
+theorem patchPiece_defect_nonneg (hm : 3 ≤ m) (cp : ClassifiedPiece m)
+    (h_def : 0 ≤ cp.toPiece.defect) :
+    ∀ p ∈ patchPiece hm cp, 0 ≤ (p : LinearPiece m).defect := by
+  cases cp with
+  | interior p =>
+    intro q hq
+    simp only [patchPiece, ClassifiedPiece.toPiece, List.mem_singleton] at hq
+    subst hq
+    exact h_def
+  | fullSingleton p =>
+    intro q hq
+    simp only [patchPiece, ClassifiedPiece.toPiece, List.mem_singleton] at hq
+    subst hq
+    exact h_def
+  | fullBoundary p =>
+    intro q hq
+    simp only [patchPiece, ClassifiedPiece.toPiece, List.mem_singleton] at hq
+    subst hq
+    exact h_def
+  | partialContact pc =>
+    intro q hq
+    simp only [patchPiece, PartialContactPiece.deformedPath,
+      List.mem_cons, List.not_mem_nil, or_false] at hq
+    rcases hq with rfl | rfl
+    · dsimp [PartialContactPiece.transformedPiece1]
+      norm_num
+    · dsimp [PartialContactPiece.transformedPiece2]
+      norm_num
+
+/-- Defect nonnegativity is preserved across the globally patched trajectory list. -/
+theorem patchTrajectory_defect_nonneg (hm : 3 ≤ m) (l : List (ClassifiedPiece m))
+    (h_def : ∀ p ∈ l.map ClassifiedPiece.toPiece, 0 ≤ (p : LinearPiece m).defect) :
+    ∀ p ∈ patchTrajectory hm l, 0 ≤ (p : LinearPiece m).defect := by
+  induction l with
+  | nil =>
+    intro p hp
+    simp only [patchTrajectory, List.not_mem_nil] at hp
+  | cons head tail ih =>
+    intro p hp
+    dsimp [patchTrajectory] at hp
+    rw [List.mem_append] at hp
+    dsimp [List.map] at h_def
+    have h_head_def : 0 ≤ head.toPiece.defect := h_def head.toPiece (List.Mem.head _)
+    have h_tail_def : ∀ p ∈ tail.map ClassifiedPiece.toPiece, 0 ≤ (p : LinearPiece m).defect :=
+      fun p hp' => h_def p (List.Mem.tail head.toPiece hp')
+    rcases hp with h_head | h_tail
+    · exact patchPiece_defect_nonneg hm head h_head_def p h_head
+    · exact ih h_tail_def p h_tail
+
+/-- 
+Constructs an admissible `GeneralizedSystem` by applying `patchTrajectory` to replace 
+all partial contacts with full boundary pieces.
+-/
+noncomputable def patchSystem (hm : 3 ≤ m) (P : ClassifiedSystem m) : GeneralizedSystem m where
+  period := patchTrajectory hm P.period
+  h_len_pos := by
+    have h_dur := patchTrajectory_preserves_duration hm P.period
+    rw [h_dur]
+    exact P.h_len_pos
+  h_defect_nonneg := patchTrajectory_defect_nonneg hm P.period P.h_defect_nonneg
+
+/-!  20.3 Conservation and Variational Domination -/
+
+/-- Patching preserves the Diophantine exponents $(U, W)$. -/
+theorem patchSystem_preserves_exponents (hm : 3 ≤ m) (P : ClassifiedSystem m) (U W : ℝ) :
+    has_exponents (toGeneralizedSystem P) U W ↔
+    has_exponents (patchSystem hm P) U W := by
+  dsimp [has_exponents, toGeneralizedSystem, patchSystem]
+  rw [patchTrajectory_preserves_Pd_change hm P.period]
+  rw [patchTrajectory_preserves_duration hm P.period]
+
+/-- The patched full-contact system dominates or matches the original contraction rate. -/
+theorem patchSystem_improves_avg_contraction (hm : 3 ≤ m) (P : ClassifiedSystem m) :
+    avg_contraction (toGeneralizedSystem P) ≤
+    avg_contraction (patchSystem hm P) := by
+  dsimp [avg_contraction, toGeneralizedSystem, patchSystem]
+  exact patchTrajectory_average_rate_ge hm P.period P.h_len_pos
+
+/-!  20.4 Reclassification of Patched Pieces -/
+
+/-- Reclassifies patched linear pieces into full contact classified segments. -/
+noncomputable def reclassifyPatchedPiece (hm : 3 ≤ m) :
+    ClassifiedPiece m → List (ClassifiedPiece m)
+  | ClassifiedPiece.interior p => [ClassifiedPiece.interior p]
+  | ClassifiedPiece.fullSingleton p => [ClassifiedPiece.fullSingleton p]
+  | ClassifiedPiece.fullBoundary p => [ClassifiedPiece.fullBoundary p]
+  | ClassifiedPiece.partialContact pc =>
+    [ClassifiedPiece.fullSingleton (pc.transformedPiece1 hm),
+     ClassifiedPiece.fullBoundary (pc.transformedPiece2 hm)]
+
+/-- Reclassifies an entire patched trajectory list. -/
+noncomputable def reclassifyPatchedTrajectory (hm : 3 ≤ m) :
+    List (ClassifiedPiece m) → List (ClassifiedPiece m)
+  | [] => []
+  | cp :: rest => reclassifyPatchedPiece hm cp ++ reclassifyPatchedTrajectory hm rest
+
+theorem reclassifyPatchedPiece_toPiece (hm : 3 ≤ m) (cp : ClassifiedPiece m) :
+    (reclassifyPatchedPiece hm cp).map ClassifiedPiece.toPiece =
+    patchPiece hm cp := by
+  cases cp with
+  | interior p => rfl
+  | fullSingleton p => rfl
+  | fullBoundary p => rfl
+  | partialContact pc => rfl
+
+theorem reclassifyPatchedTrajectory_toPiece (hm : 3 ≤ m) (l : List (ClassifiedPiece m)) :
+    (reclassifyPatchedTrajectory hm l).map ClassifiedPiece.toPiece =
+    patchTrajectory hm l := by
+  induction l with
+  | nil => rfl
+  | cons head tail ih =>
+    dsimp [reclassifyPatchedTrajectory, patchTrajectory]
+    rw [List.map_append, reclassifyPatchedPiece_toPiece, ih]
+
+/-- Embedding of a patched system back into a valid `ClassifiedSystem`. -/
+noncomputable def reclassifyPatchedSystem (hm : 3 ≤ m) (P : ClassifiedSystem m) : ClassifiedSystem m where
+  period := reclassifyPatchedTrajectory hm P.period
+  h_len_pos := by
+    rw [reclassifyPatchedTrajectory_toPiece]
+    have h_dur := patchTrajectory_preserves_duration hm P.period
+    rw [h_dur]
+    exact P.h_len_pos
+  h_defect_nonneg := by
+    rw [reclassifyPatchedTrajectory_toPiece]
+    exact patchTrajectory_defect_nonneg hm P.period P.h_defect_nonneg
+
+theorem reclassifyPatchedSystem_avg_contraction (hm : 3 ≤ m) (P : ClassifiedSystem m) :
+    avg_contraction (toGeneralizedSystem (reclassifyPatchedSystem hm P)) =
+    avg_contraction (patchSystem hm P) := by
+  dsimp [avg_contraction, toGeneralizedSystem, patchSystem, reclassifyPatchedSystem]
+  rw [reclassifyPatchedTrajectory_toPiece]
+
+theorem reclassifyPatchedSystem_has_exponents (hm : 3 ≤ m) (P : ClassifiedSystem m) (U W : ℝ) :
+    has_exponents (toGeneralizedSystem (reclassifyPatchedSystem hm P)) U W ↔
+    has_exponents (patchSystem hm P) U W := by
+  dsimp [has_exponents, toGeneralizedSystem, patchSystem, reclassifyPatchedSystem]
+  rw [reclassifyPatchedTrajectory_toPiece]
+
+/-!  20.5 Rate Sets and Supremum Equivalence -/
+
+/-- Set of achievable average contraction rates over all valid classified systems. -/
+def all_rates (_hm : 3 ≤ m) (U W : ℝ) : Set ℝ :=
+  { r | ∃ (P : ClassifiedSystem m), has_exponents (toGeneralizedSystem P) U W ∧
+        r = avg_contraction (toGeneralizedSystem P) }
+
+/-- Set of achievable average contraction rates over patched full-contact systems. -/
+def full_contact_rates (hm : 3 ≤ m) (U W : ℝ) : Set ℝ :=
+  { r | ∃ (P : ClassifiedSystem m), has_exponents (toGeneralizedSystem P) U W ∧
+        r = avg_contraction (patchSystem hm P) }
+
+theorem full_contact_rates_subset_all_rates (hm : 3 ≤ m) (U W : ℝ) :
+    full_contact_rates hm U W ⊆ all_rates hm U W := by
+  rintro r ⟨P, h_exp, rfl⟩
+  use reclassifyPatchedSystem hm P
+  constructor
+  · rw [reclassifyPatchedSystem_has_exponents]
+    exact (patchSystem_preserves_exponents hm P U W).mp h_exp
+  · rw [reclassifyPatchedSystem_avg_contraction]
+
+theorem all_rates_le_full_contact_rates (hm : 3 ≤ m) (U W : ℝ) :
+    ∀ r ∈ all_rates hm U W, ∃ r' ∈ full_contact_rates hm U W, r ≤ r' := by
+  rintro r ⟨P, h_exp, rfl⟩
+  refine ⟨avg_contraction (patchSystem hm P), ?_, ?_⟩
+  · exact ⟨P, h_exp, rfl⟩
+  · exact patchSystem_improves_avg_contraction hm P
+
+/--
+VARIATIONAL UPPER BOUND EQUIVALENCE:
+An upper bound holds over all valid systems if and only if it holds over full-contact systems.
+-/
+theorem upper_bound_iff_full_contacts (hm : 3 ≤ m) (U W : ℝ) (B : ℝ) :
+    (∀ r ∈ all_rates hm U W, r ≤ B) ↔ (∀ r ∈ full_contact_rates hm U W, r ≤ B) := by
+  constructor
+  · intro h_all r hr_fc
+    exact h_all r (full_contact_rates_subset_all_rates hm U W hr_fc)
+  · intro h_fc r hr_all
+    obtain ⟨r', hr'_fc, h_le⟩ := all_rates_le_full_contact_rates hm U W r hr_all
+    exact le_trans h_le (h_fc r' hr'_fc)
+
+/--
+THE SUPREMUM EQUALITY THEOREM:
+The supremum of average contraction over all valid systems is equal to 
+the supremum over systems containing only full contacts.
+-/
+theorem sSup_all_rates_eq_sSup_full_contacts (hm : 3 ≤ m) (U W : ℝ)
+    (h_nonempty : (full_contact_rates hm U W).Nonempty)
+    (h_bdd : BddAbove (all_rates hm U W)) :
+    sSup (all_rates hm U W) = sSup (full_contact_rates hm U W) := by
+  have h_sub := full_contact_rates_subset_all_rates hm U W
+  have h_all_nonempty : (all_rates hm U W).Nonempty := h_nonempty.mono h_sub
+  have h_fc_bdd : BddAbove (full_contact_rates hm U W) := h_bdd.mono h_sub
+  apply le_antisymm
+  · apply csSup_le h_all_nonempty
+    intro r hr
+    obtain ⟨r', hr'_fc, h_le⟩ := all_rates_le_full_contact_rates hm U W r hr
+    have hr'_le_sup : r' ≤ sSup (full_contact_rates hm U W) := le_csSup h_fc_bdd hr'_fc
+    exact le_trans h_le hr'_le_sup
+  · apply csSup_le h_nonempty
+    intro r hr
+    exact le_csSup h_bdd (h_sub hr)
+
+/-!  20.6 Universal Upper Bound Integration for m ≥ 3 -/
+
+/--
+Universal Upper Bound for all Classified Systems for $m \ge 3$:
+Wired through `patchSystem` and `upper_bound_bridge_large_W`.
+-/
+theorem upper_bound_bridge_large_W_classified (hm : 3 ≤ m) [NeZero m] (U W : ℝ) (hW_pos : 0 ≤ W) :
+    ∀ P : ClassifiedSystem m, has_exponents (toGeneralizedSystem P) U W →
+    avg_contraction (toGeneralizedSystem P) ≤ (m : ℝ) / (1 + W) := by
+  intro P h_exp
+  have h_patch_exp := (patchSystem_preserves_exponents hm P U W).mp h_exp
+  have h_patch_bound := upper_bound_bridge_large_W m U W hW_pos (patchSystem hm P) h_patch_exp
+  have h_improve := patchSystem_improves_avg_contraction hm P
+  exact le_trans h_improve h_patch_bound
+
+/--
+Unified Theorem 1.1 with Complete Normal Form Integration:
+Formally justifies the restriction to boundary blocks and computes the Hausdorff dimension.
+-/
+theorem theorem_1_1_with_normal_form
+    (hm : 3 ≤ m) [NeZero m]
+    (_hU_lower : 1 / (m : ℝ) < U)
+    (_hU_upper : U < 1 / ((m : ℝ) - 1))
+    (_hW_lower : U / (((m : ℝ) - 1) * (1 - ((m : ℝ) - 1) * U)) ≤ W)
+    (hW_pos : 0 ≤ W)
+    (h_template : ∃ x, 0 < Section4.L m U W x - 1 ∧
+      (∀ p ∈ Section4.pieces m U W x, 0 ≤ (p : LinearPiece m).defect) ∧
+      sum_Pd_change (Section4.pieces m U W x) / sum_len (Section4.pieces m U W x) = W / (1 + W) ∧
+      (m : ℝ) / (1 + W) ≤ sum_delta (Section4.pieces m U W x) / sum_len (Section4.pieces m U W x)) :
+    dim_H_E m U W = LargeW_Target m W ∧
+    (∀ P : ClassifiedSystem m, has_exponents (toGeneralizedSystem P) U W →
+      avg_contraction (toGeneralizedSystem P) ≤ LargeW_Target m W) ∧
+    (sSup (all_rates hm U W) = sSup (full_contact_rates hm U W) ∨
+     (all_rates hm U W = ∅ ∧ full_contact_rates hm U W = ∅)) := by
+  refine ⟨?_, ?_, ?_⟩
+  · exact theorem_1_1 m U W _hU_lower _hU_upper _hW_lower hW_pos h_template
+  · intro P h_exp
+    exact upper_bound_bridge_large_W_classified hm U W hW_pos P h_exp
+  · by_cases h_fc : (full_contact_rates hm U W).Nonempty
+    · have h_bdd : BddAbove (all_rates hm U W) := by
+        use (m : ℝ) / (1 + W)
+        rintro r ⟨P, h_exp, rfl⟩
+        exact upper_bound_bridge_large_W_classified hm U W hW_pos P h_exp
+      left
+      exact sSup_all_rates_eq_sSup_full_contacts hm U W h_fc h_bdd
+    · right
+      have h_empty_fc : full_contact_rates hm U W = ∅ := Set.not_nonempty_iff_eq_empty.mp h_fc
+      have h_empty_all : all_rates hm U W = ∅ := by
+        rw [← Set.not_nonempty_iff_eq_empty]
+        rintro ⟨r, hr⟩
+        obtain ⟨r', hr'_fc, _⟩ := all_rates_le_full_contact_rates hm U W r hr
+        exact h_fc ⟨r', hr'_fc⟩
+      exact ⟨h_empty_all, h_empty_fc⟩
+
+end NormalFormIntegration
