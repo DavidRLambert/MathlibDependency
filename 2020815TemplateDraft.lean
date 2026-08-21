@@ -2599,3 +2599,332 @@ theorem prove_excursion_peak_bound_vals
   exact h_global_target
 
 end GeometricDerivation
+
+/-!
+ Constructive Trajectory Realizations & Fully Defined Deductive Bridges
+Concrete definitions of the multi-piece cycles and witnesses for GeneralizedSystem.
+-/
+
+namespace ConstructiveSection4
+
+open LinearPiece Section4
+
+variable (m : ℕ) [NeZero m]
+variable (U W x : ℝ)
+
+/-- Piece 1: $[2, d]$ boundary block advancing $P_d$ with zero defect. -/
+noncomputable def piece1 (h1 : 0 ≤ len1 m U x) : LinearPiece m where
+  qa := 1
+  qb := 1 + len1 m U x
+  h_qa_le_qb := by linarith [h1]
+  delta := rate1 m
+  Pd_slope := 1 / (m : ℝ)
+  defect := 0
+  pointwise_id := by
+    dsimp [rate1]
+    have hm : (m : ℝ) ≠ 0 := by exact_mod_cast (NeZero.ne m)
+    field_simp
+    ring
+  Pd_qa := alpha U
+  Pd_qb := x
+  Pd_linear := by
+    dsimp [len1]
+    have hm : (m : ℝ) ≠ 0 := by exact_mod_cast (NeZero.ne m)
+    field_simp
+    ring
+
+/-- Piece 2: $[d, d]$ resting block elevating $P_d$ to maximum $H$. -/
+noncomputable def piece2 (_h1 : 0 ≤ len1 m U x) (h2 : 0 ≤ len2 m U W x) : LinearPiece m where
+  qa := 1 + len1 m U x
+  qb := 1 + len1 m U x + len2 m U W x
+  h_qa_le_qb := by linarith [h2]
+  delta := rate2
+  Pd_slope := 1
+  defect := 0
+  pointwise_id := by
+    dsimp [rate2]
+    ring
+  Pd_qa := x
+  Pd_qb := H m U W x
+  Pd_linear := by
+    dsimp [len2]
+    ring
+
+/-- Piece 3: $[1, 1]$ interior block lifting $P_1$ from $a$ to $x$. -/
+noncomputable def piece3 (_h1 : 0 ≤ len1 m U x) (_h2 : 0 ≤ len2 m U W x)
+    (h3 : 0 ≤ len3 m U x) : LinearPiece m where
+  qa := 1 + len1 m U x + len2 m U W x
+  qb := 1 + len1 m U x + len2 m U W x + len3 m U x
+  h_qa_le_qb := by linarith [h3]
+  delta := rate3 m
+  Pd_slope := 0
+  defect := 0
+  pointwise_id := by
+    dsimp [rate3]
+    ring
+  Pd_qa := H m U W x
+  Pd_qb := H m U W x
+  Pd_linear := by ring
+
+/-- Piece 4: $[1, m]$ interior block advancing $P_1, \dots, P_m$ from $x$ to $y$. -/
+noncomputable def piece4 (_h1 : 0 ≤ len1 m U x) (_h2 : 0 ≤ len2 m U W x)
+    (_h3 : 0 ≤ len3 m U x) (h4 : 0 ≤ len4 m U W x) : LinearPiece m where
+  qa := 1 + len1 m U x + len2 m U W x + len3 m U x
+  qb := 1 + len1 m U x + len2 m U W x + len3 m U x + len4 m U W x
+  h_qa_le_qb := by linarith [h4]
+  delta := rate4 m
+  Pd_slope := 0
+  defect := 0
+  pointwise_id := by
+    dsimp [rate4]
+    ring
+  Pd_qa := H m U W x
+  Pd_qb := H m U W x
+  Pd_linear := by ring
+
+/-- Piece 5: $[2, m]$ interior block pulling $P_2, \dots, P_m$ from $y$ to $H$. -/
+noncomputable def piece5 (_h1 : 0 ≤ len1 m U x) (_h2 : 0 ≤ len2 m U W x)
+    (_h3 : 0 ≤ len3 m U x) (_h4 : 0 ≤ len4 m U W x) (h5 : 0 ≤ len5 m U W x) : LinearPiece m where
+  qa := 1 + len1 m U x + len2 m U W x + len3 m U x + len4 m U W x
+  qb := 1 + len1 m U x + len2 m U W x + len3 m U x + len4 m U W x + len5 m U W x
+  h_qa_le_qb := by linarith [h5]
+  delta := rate5 m
+  Pd_slope := 0
+  defect := 1
+  pointwise_id := by
+    dsimp [rate5]
+    ring
+  Pd_qa := H m U W x
+  Pd_qb := H m U W x
+  Pd_linear := by ring
+
+/-- Constructive realization of the 5-piece Large-$W$ periodic cycle. -/
+noncomputable def pieces (h1 : 0 ≤ len1 m U x) (h2 : 0 ≤ len2 m U W x)
+    (h3 : 0 ≤ len3 m U x) (h4 : 0 ≤ len4 m U W x) (h5 : 0 ≤ len5 m U W x) : List (LinearPiece m) :=
+  [piece1 m U x h1,
+   piece2 m U W x h1 h2,
+   piece3 m U W x h1 h2 h3,
+   piece4 m U W x h1 h2 h3 h4,
+   piece5 m U W x h1 h2 h3 h4 h5]
+
+/-- The total length of the 5-piece list evaluates constructively to $L - 1$. -/
+theorem sum_of_lengths_eq (h_alpha : alpha U ≠ 0)
+    (h1 : 0 ≤ len1 m U x) (h2 : 0 ≤ len2 m U W x)
+    (h3 : 0 ≤ len3 m U x) (h4 : 0 ≤ len4 m U W x) (h5 : 0 ≤ len5 m U W x) :
+    sum_len (pieces m U W x h1 h2 h3 h4 h5) = L m U W x - 1 := by
+  dsimp [pieces, sum_len, piece1, piece2, piece3, piece4, piece5]
+  have h_sum := Section4.sum_of_lengths m U W x h_alpha
+  linarith
+
+/-- Positivity of defect on all 5 pieces. -/
+theorem pieces_defect_nonneg
+    (h1 : 0 ≤ len1 m U x) (h2 : 0 ≤ len2 m U W x)
+    (h3 : 0 ≤ len3 m U x) (h4 : 0 ≤ len4 m U W x) (h5 : 0 ≤ len5 m U W x) :
+    ∀ p ∈ pieces m U W x h1 h2 h3 h4 h5, 0 ≤ (p : LinearPiece m).defect := by
+  intro p hp
+  simp only [pieces, List.mem_cons, List.not_mem_nil, or_false] at hp
+  rcases hp with rfl | rfl | rfl | rfl | rfl
+  · dsimp [piece1]; norm_num
+  · dsimp [piece2]; norm_num
+  · dsimp [piece3]; norm_num
+  · dsimp [piece4]; norm_num
+  · dsimp [piece5]; norm_num
+
+/-- Verified continuity across the 5 pieces. -/
+theorem pieces_contiguous
+    (h1 : 0 ≤ len1 m U x) (h2 : 0 ≤ len2 m U W x)
+    (h3 : 0 ≤ len3 m U x) (h4 : 0 ≤ len4 m U W x) (h5 : 0 ≤ len5 m U W x) :
+    IsContiguous (pieces m U W x h1 h2 h3 h4 h5) := by
+  dsimp [pieces, IsContiguous, piece1, piece2, piece3, piece4, piece5]
+  refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, trivial⟩
+
+/-- Sum of $\Delta P_d$ over the 5-piece cycle. -/
+theorem sum_Pd_change_eq
+    (h1 : 0 ≤ len1 m U x) (h2 : 0 ≤ len2 m U W x)
+    (h3 : 0 ≤ len3 m U x) (h4 : 0 ≤ len4 m U W x) (h5 : 0 ≤ len5 m U W x) :
+    sum_Pd_change (pieces m U W x h1 h2 h3 h4 h5) = H m U W x - alpha U := by
+  dsimp [pieces, sum_Pd_change, piece1, piece2, piece3, piece4, piece5]
+  ring
+
+end ConstructiveSection4
+
+namespace ConstructiveSection6
+
+open LinearPiece Section6
+
+variable (A B : ℝ)
+
+/-- Piece 1: $[2, 3]$ boundary block on $m = 2$. -/
+noncomputable def piece1 (h1 : 0 ≤ len1 A B) : LinearPiece 2 where
+  qa := 1
+  qb := 1 + len1 A B
+  h_qa_le_qb := by linarith [h1]
+  delta := rate1
+  Pd_slope := 1 / 2
+  defect := 0
+  pointwise_id := by
+    dsimp [rate1]
+    norm_num
+  Pd_qa := A
+  Pd_qb := x A B
+  Pd_linear := by
+    dsimp [len1]
+    ring
+
+/-- Piece 2: $[3, 3]$ resting block on $m = 2$. -/
+noncomputable def piece2 (_h1 : 0 ≤ len1 A B) (h2 : 0 ≤ len2 A B) : LinearPiece 2 where
+  qa := 1 + len1 A B
+  qb := 1 + len1 A B + len2 A B
+  h_qa_le_qb := by linarith [h2]
+  delta := rate2
+  Pd_slope := 1
+  defect := 0
+  pointwise_id := by
+    dsimp [rate2]
+    norm_num
+  Pd_qa := x A B
+  Pd_qb := H A B
+  Pd_linear := by
+    dsimp [len2]
+    ring
+
+/-- Piece 3: $[1, 1]$ interior block on $m = 2$. -/
+noncomputable def piece3 (_h1 : 0 ≤ len1 A B) (_h2 : 0 ≤ len2 A B) (h3 : 0 ≤ len3 A B) :
+    LinearPiece 2 where
+  qa := 1 + len1 A B + len2 A B
+  qb := 1 + len1 A B + len2 A B + len3 A B
+  h_qa_le_qb := by linarith [h3]
+  delta := rate3
+  Pd_slope := 0
+  defect := 0
+  pointwise_id := by
+    dsimp [rate3]
+    norm_num
+  Pd_qa := H A B
+  Pd_qb := H A B
+  Pd_linear := by ring
+
+/-- Piece 4: $[2, 2]$ defective interior block on $m = 2$. -/
+noncomputable def piece4 (_h1 : 0 ≤ len1 A B) (_h2 : 0 ≤ len2 A B)
+    (_h3 : 0 ≤ len3 A B) (h4 : 0 ≤ len4 A B) : LinearPiece 2 where
+  qa := 1 + len1 A B + len2 A B + len3 A B
+  qb := 1 + len1 A B + len2 A B + len3 A B + len4 A B
+  h_qa_le_qb := by linarith [h4]
+  delta := rate4
+  Pd_slope := 0
+  defect := 1
+  pointwise_id := by
+    dsimp [rate4]
+    norm_num
+  Pd_qa := H A B
+  Pd_qb := H A B
+  Pd_linear := by ring
+
+/-- Constructive realization of the 4-piece periodic cycle for $m = 2$. -/
+noncomputable def pieces (h1 : 0 ≤ len1 A B) (h2 : 0 ≤ len2 A B)
+    (h3 : 0 ≤ len3 A B) (h4 : 0 ≤ len4 A B) : List (LinearPiece 2) :=
+  [piece1 A B h1,
+   piece2 A B h1 h2,
+   piece3 A B h1 h2 h3,
+   piece4 A B h1 h2 h3 h4]
+
+/-- The total length of the 4-piece list evaluates constructively to $L - 1$. -/
+theorem sum_of_lengths_eq
+    (h1 : 0 ≤ len1 A B) (h2 : 0 ≤ len2 A B) (h3 : 0 ≤ len3 A B) (h4 : 0 ≤ len4 A B) :
+    sum_len (pieces A B h1 h2 h3 h4) = L A B - 1 := by
+  dsimp [pieces, sum_len, piece1, piece2, piece3, piece4]
+  have h_sum := Section6.sum_of_lengths A B
+  linarith
+
+/-- Positivity of defect on all 4 pieces. -/
+theorem pieces_defect_nonneg
+    (h1 : 0 ≤ len1 A B) (h2 : 0 ≤ len2 A B) (h3 : 0 ≤ len3 A B) (h4 : 0 ≤ len4 A B) :
+    ∀ p ∈ pieces A B h1 h2 h3 h4, 0 ≤ (p : LinearPiece 2).defect := by
+  intro p hp
+  simp only [pieces, List.mem_cons, List.not_mem_nil, or_false] at hp
+  rcases hp with rfl | rfl | rfl | rfl
+  · dsimp [piece1]; norm_num
+  · dsimp [piece2]; norm_num
+  · dsimp [piece3]; norm_num
+  · dsimp [piece4]; norm_num
+
+/-- Verified continuity across the 4 pieces. -/
+theorem pieces_contiguous
+    (h1 : 0 ≤ len1 A B) (h2 : 0 ≤ len2 A B) (h3 : 0 ≤ len3 A B) (h4 : 0 ≤ len4 A B) :
+    IsContiguous (pieces A B h1 h2 h3 h4) := by
+  dsimp [pieces, IsContiguous, piece1, piece2, piece3, piece4]
+  refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, trivial⟩
+
+/-- Sum of $\Delta P_d$ over the 4-piece cycle. -/
+theorem sum_Pd_change_eq
+    (h1 : 0 ≤ len1 A B) (h2 : 0 ≤ len2 A B) (h3 : 0 ≤ len3 A B) (h4 : 0 ≤ len4 A B) :
+    sum_Pd_change (pieces A B h1 h2 h3 h4) = H A B - A := by
+  dsimp [pieces, sum_Pd_change, piece1, piece2, piece3, piece4]
+  ring
+
+end ConstructiveSection6
+
+namespace ConstructiveBridges
+
+open LinearPiece Section4 Section6 DeductiveBridges ConstructiveSection4 ConstructiveSection6
+
+/-- Constructive Large-$W$ Generalized System using the concrete 5-piece cycle. -/
+noncomputable def construct_large_W_template (m : ℕ) [NeZero m] (U W x : ℝ)
+    (h_len : 0 < Section4.L m U W x - 1)
+    (h_alpha : Section4.alpha U ≠ 0)
+    (h1 : 0 ≤ Section4.len1 m U x) (h2 : 0 ≤ Section4.len2 m U W x)
+    (h3 : 0 ≤ Section4.len3 m U x) (h4 : 0 ≤ Section4.len4 m U W x)
+    (h5 : 0 ≤ Section4.len5 m U W x) :
+    GeneralizedSystem m where
+  period := ConstructiveSection4.pieces m U W x h1 h2 h3 h4 h5
+  h_len_pos := by
+    have h_sum := ConstructiveSection4.sum_of_lengths_eq m U W x h_alpha h1 h2 h3 h4 h5
+    rwa [h_sum]
+  h_defect_nonneg := ConstructiveSection4.pieces_defect_nonneg m U W x h1 h2 h3 h4 h5
+
+/-- Existence of a valid trajectory achieves the Large-$W$ lower bound constructively. -/
+theorem lower_bound_bridge_large_W (m : ℕ) [NeZero m] (U W : ℝ)
+    (h_template_exists : ∃ x, 0 < Section4.L m U W x - 1 ∧
+      Section4.alpha U ≠ 0 ∧
+      (∃ (h1 : 0 ≤ Section4.len1 m U x) (h2 : 0 ≤ Section4.len2 m U W x)
+         (h3 : 0 ≤ Section4.len3 m U x) (h4 : 0 ≤ Section4.len4 m U W x)
+         (h5 : 0 ≤ Section4.len5 m U W x),
+        sum_Pd_change (ConstructiveSection4.pieces m U W x h1 h2 h3 h4 h5) /
+          sum_len (ConstructiveSection4.pieces m U W x h1 h2 h3 h4 h5) = W / (1 + W) ∧
+        (m : ℝ) / (1 + W) ≤
+          sum_delta (ConstructiveSection4.pieces m U W x h1 h2 h3 h4 h5) /
+          sum_len (ConstructiveSection4.pieces m U W x h1 h2 h3 h4 h5))) :
+    ∃ P : GeneralizedSystem m, has_exponents P U W ∧
+    (m : ℝ) / (1 + W) ≤ avg_contraction P := by
+  rcases h_template_exists with ⟨x, h_len, h_alpha, h1, h2, h3, h4, h5, h_exp, h_rate⟩
+  let P := construct_large_W_template m U W x h_len h_alpha h1 h2 h3 h4 h5
+  exact ⟨P, h_exp, h_rate⟩
+
+/-- Constructive Remaining-Range Generalized System using the concrete 4-piece cycle. -/
+noncomputable def construct_remaining_range_template (A B : ℝ)
+    (h_len : 0 < Section6.L A B - 1)
+    (h1 : 0 ≤ Section6.len1 A B) (h2 : 0 ≤ Section6.len2 A B)
+    (h3 : 0 ≤ Section6.len3 A B) (h4 : 0 ≤ Section6.len4 A B) :
+    GeneralizedSystem 2 where
+  period := ConstructiveSection6.pieces A B h1 h2 h3 h4
+  h_len_pos := by
+    have h_sum := ConstructiveSection6.sum_of_lengths_eq A B h1 h2 h3 h4
+    rwa [h_sum]
+  h_defect_nonneg := ConstructiveSection6.pieces_defect_nonneg A B h1 h2 h3 h4
+
+/-- Existence of a valid trajectory achieves the Remaining-Range lower bound constructively. -/
+theorem lower_bound_bridge_remaining_range (U W : ℝ) (D_low : ℝ)
+    (h_cycle_exists : ∃ A B, 0 < Section6.L A B - 1 ∧
+      (∃ (h1 : 0 ≤ Section6.len1 A B) (h2 : 0 ≤ Section6.len2 A B)
+         (h3 : 0 ≤ Section6.len3 A B) (h4 : 0 ≤ Section6.len4 A B),
+        sum_Pd_change (ConstructiveSection6.pieces A B h1 h2 h3 h4) /
+          sum_len (ConstructiveSection6.pieces A B h1 h2 h3 h4) = W / (1 + W) ∧
+        D_low ≤ sum_delta (ConstructiveSection6.pieces A B h1 h2 h3 h4) /
+          sum_len (ConstructiveSection6.pieces A B h1 h2 h3 h4))) :
+    ∃ P : GeneralizedSystem 2, has_exponents P U W ∧
+    D_low ≤ avg_contraction P := by
+  rcases h_cycle_exists with ⟨A, B, h_len, h1, h2, h3, h4, h_exp, h_rate⟩
+  let P := construct_remaining_range_template A B h_len h1 h2 h3 h4
+  exact ⟨P, h_exp, h_rate⟩
+
+end ConstructiveBridges
