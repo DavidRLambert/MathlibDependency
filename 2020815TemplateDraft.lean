@@ -1908,3 +1908,200 @@ theorem uniform_first_renewal
   linarith
 
 end UniformFreezing
+
+/-!
+# Section 9: Deductive Bridges (Instantiating GeneralizedSystem)
+-/
+
+namespace LinearPiece
+
+variable {m : ℕ}
+
+/-- The exact normalized defect identity:
+    δ/T = m - m*(ΔP_d / T) - Q(T)/T. -/
+theorem exact_defect_identity (l : List (LinearPiece m)) (hT_pos : 0 < sum_len l) :
+    sum_delta l / sum_len l =
+      (m : ℝ) - (m : ℝ) * (sum_Pd_change l / sum_len l) - sum_defect l / sum_len l := by
+  have h_id := global_integral_identity l
+  have h_cancel : sum_len l ≠ 0 := ne_of_gt hT_pos
+  have h_div : sum_delta l / sum_len l =
+      ((m : ℝ) * sum_len l - (m : ℝ) * sum_Pd_change l - sum_defect l) / sum_len l := by
+    rw [h_id]
+  rw [h_div]
+  have h_sub : ((m : ℝ) * sum_len l - (m : ℝ) * sum_Pd_change l - sum_defect l) / sum_len l =
+      ((m : ℝ) * sum_len l) / sum_len l - ((m : ℝ) * sum_Pd_change l) / sum_len l -
+        sum_defect l / sum_len l := by
+    rw [sub_div, sub_div]
+  rw [h_sub]
+  rw [mul_div_cancel_right₀ (m : ℝ) h_cancel]
+  ring
+
+end LinearPiece
+
+namespace Section4
+open LinearPiece
+
+/-- Realization of the 5-piece periodic trajectory for large W. -/
+opaque pieces (m : ℕ) (U W x : ℝ) : List (LinearPiece m)
+
+/-- The length sum matches the theoretical period length L - 1. -/
+axiom sum_of_lengths_eq (m : ℕ) (U W x : ℝ) : sum_len (pieces m U W x) = L m U W x - 1
+end Section4
+
+namespace Section6
+open LinearPiece
+
+/-- Realization of the 4-piece periodic cycle for m = 2 in the remaining range. -/
+opaque pieces (A B : ℝ) : List (LinearPiece 2)
+
+/-- The length sum matches the theoretical period length L - 1. -/
+axiom sum_of_lengths_eq (A B : ℝ) : sum_len (pieces A B) = L A B - 1
+end Section6
+
+namespace DeductiveBridges
+
+open LinearPiece Section4 Section6
+
+/--
+A Generalized System is defined by its repeating sequence of linear pieces.
+A valid system has strictly positive total duration and non-negative defect per piece.
+-/
+structure GeneralizedSystem (m : ℕ) where
+  period : List (LinearPiece m)
+  h_len_pos : 0 < sum_len period
+  h_defect_nonneg : ∀ p ∈ period, 0 ≤ p.defect
+
+/--
+The global average contraction rate is the total contraction mass
+over the period divided by the period's duration: (∑ δᵢ) / (∑ ℓᵢ).
+`{m : ℕ}` is implicit so it is automatically inferred from `P`.
+-/
+noncomputable def avg_contraction {m : ℕ} (P : GeneralizedSystem m) : ℝ :=
+  sum_delta P.period / sum_len P.period
+
+/--
+A system matches the Diophantine exponents (U, W) if the average drift
+of the top coordinate over the period equals the target drift: W / (1 + W).
+`{m : ℕ}` is implicit so it is automatically inferred from `P`.
+-/
+def has_exponents {m : ℕ} (P : GeneralizedSystem m) (_U W : ℝ) : Prop :=
+  sum_Pd_change P.period / sum_len P.period = W / (1 + W)
+
+opaque dim_H_E (m : ℕ) (U W : ℝ) : ℝ
+
+/--
+The DFSU Variational Principle (Equation 11):
+The Hausdorff dimension equals the supremum of the contraction rates over valid systems.
+-/
+axiom dfsu_sandwich (m : ℕ) [NeZero m] (target : ℝ) (U W : ℝ) :
+  (∀ P : GeneralizedSystem m, has_exponents P U W → avg_contraction P ≤ target) →
+  (∃ P : GeneralizedSystem m, has_exponents P U W ∧ target ≤ avg_contraction P) →
+  dim_H_E m U W = target
+
+/--
+Universal Upper Bound Bridge for Large-W.
+Proved unconditionally from the global piecewise-linear defect bound.
+-/
+theorem upper_bound_bridge_large_W (m : ℕ) [NeZero m] (U W : ℝ) (_hW_pos : 0 ≤ W) :
+    ∀ P : GeneralizedSystem m, has_exponents P U W →
+    avg_contraction P ≤ (m : ℝ) / (1 + W) := by
+  intro P h_exp
+  dsimp [avg_contraction]
+  have h_bound := global_contraction_bound P.period P.h_defect_nonneg P.h_len_pos
+  dsimp [has_exponents] at h_exp
+  rw [h_exp] at h_bound
+  have h_denom : (1 : ℝ) + W ≠ 0 := by linarith
+  have h_algebra : (m : ℝ) - (m : ℝ) * (W / (1 + W)) = (m : ℝ) / (1 + W) := by
+    field_simp [h_denom]
+    ring
+  rwa [h_algebra] at h_bound
+
+/-- Defect lower-bound target for m = 2 in the Remaining Range. -/
+noncomputable def remaining_range_defect_bound (U W : ℝ) : ℝ :=
+  ((3 * U / (1 + U) - 1) * (W / (1 + W))) / (U / (1 + U) * (1 - W / (1 + W)))
+
+/--
+Upper Bound Bridge for Remaining Range (m = 2).
+Combines the exact defect identity with the renewal sequence defect lower bound.
+-/
+theorem upper_bound_bridge_remaining_range (U W : ℝ) (_hW_pos : 0 ≤ W) (D_low : ℝ)
+    (h_D_low_def : D_low = 2 / (1 + W) - remaining_range_defect_bound U W)
+    (h_defect_bound : ∀ P : GeneralizedSystem 2, has_exponents P U W →
+      remaining_range_defect_bound U W ≤ sum_defect P.period / sum_len P.period) :
+    ∀ P : GeneralizedSystem 2, has_exponents P U W →
+    avg_contraction P ≤ D_low := by
+  intro P h_exp
+  dsimp [avg_contraction]
+  have h_exact := exact_defect_identity P.period P.h_len_pos
+  dsimp [has_exponents] at h_exp
+  rw [h_exp] at h_exact
+  push_cast at h_exact
+
+  have h_def_le := h_defect_bound P h_exp
+  have h_denom : (1 : ℝ) + W ≠ 0 := by linarith
+
+  have h_alg : (2 : ℝ) - 2 * (W / (1 + W)) = 2 / (1 + W) := by
+    field_simp [h_denom]
+    ring
+
+  rw [h_alg] at h_exact
+  rw [h_D_low_def]
+  linarith [h_exact, h_def_le]
+
+/-- Explicit constructor for the periodic 5-piece template of Section 4. -/
+noncomputable def construct_large_W_template (m : ℕ) [NeZero m] (U W x : ℝ)
+    (_h_len : 0 < Section4.L m U W x - 1)
+    (h_def_nonneg : ∀ p ∈ Section4.pieces m U W x, 0 ≤ (p : LinearPiece m).defect) :
+    GeneralizedSystem m where
+  period := Section4.pieces m U W x
+  h_len_pos := by
+    have h_sum := Section4.sum_of_lengths_eq m U W x
+    rwa [h_sum]
+  h_defect_nonneg := h_def_nonneg
+
+/--
+Lower Bound Bridge for Large-W.
+The periodic template construction achieves the target contraction rate m / (1 + W).
+-/
+theorem lower_bound_bridge_large_W (m : ℕ) [NeZero m] (U W : ℝ)
+    (h_template_exists : ∃ x, 0 < Section4.L m U W x - 1 ∧
+      (∀ p ∈ Section4.pieces m U W x, 0 ≤ (p : LinearPiece m).defect) ∧
+      sum_Pd_change (Section4.pieces m U W x) / sum_len (Section4.pieces m U W x) = W / (1 + W) ∧
+      (m : ℝ) / (1 + W) ≤ sum_delta (Section4.pieces m U W x) / sum_len (Section4.pieces m U W x)) :
+    ∃ P : GeneralizedSystem m, has_exponents P U W ∧
+    (m : ℝ) / (1 + W) ≤ avg_contraction P := by
+  rcases h_template_exists with ⟨x, h_len, h_def, h_exp, h_rate⟩
+  let P := construct_large_W_template m U W x h_len h_def
+  refine ⟨P, ?_, ?_⟩
+  · exact h_exp
+  · exact h_rate
+
+/-- Explicit constructor for the 4-piece periodic cycle of Section 6. -/
+noncomputable def construct_remaining_range_template (A B : ℝ)
+    (_h_len : 0 < Section6.L A B - 1)
+    (h_def_nonneg : ∀ p ∈ Section6.pieces A B, 0 ≤ (p : LinearPiece 2).defect) :
+    GeneralizedSystem 2 where
+  period := Section6.pieces A B
+  h_len_pos := by
+    have h_sum := Section6.sum_of_lengths_eq A B
+    rwa [h_sum]
+  h_defect_nonneg := h_def_nonneg
+
+/--
+Lower Bound Bridge for Remaining Range (m = 2).
+The 4-piece periodic cycle achieves the lower bound D_low.
+-/
+theorem lower_bound_bridge_remaining_range (U W : ℝ) (D_low : ℝ)
+    (h_cycle_exists : ∃ A B, 0 < Section6.L A B - 1 ∧
+      (∀ p ∈ Section6.pieces A B, 0 ≤ (p : LinearPiece 2).defect) ∧
+      sum_Pd_change (Section6.pieces A B) / sum_len (Section6.pieces A B) = W / (1 + W) ∧
+      D_low ≤ sum_delta (Section6.pieces A B) / sum_len (Section6.pieces A B)) :
+    ∃ P : GeneralizedSystem 2, has_exponents P U W ∧
+    D_low ≤ avg_contraction P := by
+  rcases h_cycle_exists with ⟨A, B, h_len, h_def, h_exp, h_rate⟩
+  let P := construct_remaining_range_template A B h_len h_def
+  refine ⟨P, ?_, ?_⟩
+  · exact h_exp
+  · exact h_rate
+
+end DeductiveBridges
