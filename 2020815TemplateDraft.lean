@@ -4414,3 +4414,329 @@ noncomputable def trajectoryOfSystem (A B : ℝ)
     exact eval_order A B hA1 hA2 hB hB_star hL q hq
 
 end TrajectoryIsomorphism
+
+/-!
+ Section 17: Wiring the Global Phase Minimum to the DFSU Bound
+ Formalizes the analytical bridge between the continuous phase average minimum D(q₂)
+ and the discrete contraction average (sum_delta / sum_len) of the 4-piece template,
+ completing the formalization of Sections 6.4 and 7.5 of the paper.
+-/
+
+namespace PhaseMinimumToDFSU
+
+open LinearPiece
+open Section5 Section6 ConstructiveSection6 DeductiveBridges ConstructiveBridges
+open GlobalPeriodicExtension ConstructiveGlobalPeriodicExtension TrajectoryIsomorphism PhaseDynamics
+
+variable (A B : ℝ)
+variable (U W : ℝ)
+
+/-! 17.1 Closed-Form Continuous Phase Average at q₂ -/
+
+/-- 
+The continuous phase average evaluated at the critical phase q₂ (Equation 51):
+  D(q₂) = 2 - 2B - (3A - 1)B / (A(L - 1)).
+-/
+noncomputable def D_q2 (A B : ℝ) : ℝ :=
+  2 - 2 * B - ((Section6.d0 A) * B) / (A * (Section6.L A B - 1))
+
+/-- 
+Equivalence of D(q₂) with D_low(U, W) in terms of the original Diophantine exponents:
+  D(q₂) = D_low(U, W).
+-/
+theorem D_q2_eq_D_low (hA : A = U / (1 + U)) (hB : B = W / (1 + W))
+    (h_denom1 : A * (1 + B) - B ≠ 0)
+    (hA_ne : A ≠ 0)
+    (h_UW_denom : U * (W + 1) * (2 * (1 - U) * W - U) ≠ 0) :
+    D_q2 A B = Section1.D_low U W := by
+  dsimp [D_q2, Section1.D_low, Section6.d0]
+  have h_L_eq : Section6.L A B = Section7.L_target A B := by
+    dsimp [Section6.L, Section7.L_target, Section6.c]
+  rw [h_L_eq]
+  have h_term := Section7.terminal_ratio_eq A B h_denom1 hA_ne
+  rw [h_term, hA, hB]
+  have hU_ne : U ≠ 0 := fun h => h_UW_denom (by rw [h, zero_mul, zero_mul])
+  have hW1_ne : W + 1 ≠ 0 := fun h => h_UW_denom (by rw [mul_assoc, h, zero_mul, mul_zero])
+  have hU1 : 1 + U ≠ 0 := by
+    intro h
+    apply hA_ne
+    rw [hA, h, div_zero]
+  have hW1 : 1 + W ≠ 0 := by
+    intro h
+    apply hW1_ne
+    linarith
+  have h_inner : 2 * (1 - U) * W - U ≠ 0 := fun h => h_UW_denom (by rw [h, mul_zero])
+  have hA_div_ne : U / (1 + U) ≠ 0 := by rwa [← hA]
+  have h_denom_sub : 2 * (W / (1 + W)) - 3 * (U / (1 + U)) * (W / (1 + W)) - U / (1 + U) ≠ 0 := by
+    intro h
+    apply h_inner
+    have h_alg : 2 * (W / (1 + W)) - 3 * (U / (1 + U)) * (W / (1 + W)) - U / (1 + U) =
+        (2 * (1 - U) * W - U) / ((1 + U) * (1 + W)) := by
+      field_simp [hU1, hW1]; ring
+    rw [h_alg] at h
+    exact (div_eq_zero_iff.mp h).resolve_right (mul_ne_zero hU1 hW1)
+  have h_dr_ne : U / (1 + U) * (2 * (W / (1 + W)) - 3 * (U / (1 + U)) * (W / (1 + W)) - U / (1 + U)) ≠ 0 :=
+    mul_ne_zero hA_div_ne h_denom_sub
+  have h_frac_eq :
+      ((3 * (U / (1 + U)) - 1) * (W / (1 + W)) * (U / (1 + U) * (1 + W / (1 + W)) - W / (1 + W))) /
+      (U / (1 + U) * (2 * (W / (1 + W)) - 3 * (U / (1 + U)) * (W / (1 + W)) - U / (1 + U))) =
+      ((2 * U - 1) * W * (U + (U - 1) * W)) / (U * (W + 1) * (2 * (1 - U) * W - U)) := by
+    rw [div_eq_div_iff h_dr_ne h_UW_denom]
+    have hW_comm : W + 1 = 1 + W := by ring
+    rw [hW_comm]
+    field_simp [hU1, hW1]
+    ring
+  rw [h_frac_eq]
+  have h_two_sub : 2 - 2 * (W / (1 + W)) = 2 / (W + 1) := by
+    have hW_comm : 1 + W = W + 1 := by ring
+    rw [hW_comm]
+    field_simp [hW1_ne]
+    ring
+  rw [h_two_sub]
+  rw [sub_eq_iff_eq_add, ← add_div]
+  rw [div_eq_div_iff hW1_ne h_UW_denom]
+  ring
+
+/-! 17.2 Positivity of the Shifted Polynomial N(A, L) -/
+
+/-- 
+Strict positivity of the shifted polynomial N_transformed(A, s) on the intermediate domain:
+For 1/3 < A < 1/2 and shift parameter s ≥ 0, N_transformed(A, s) > 0.
+-/
+theorem N_transformed_pos (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2) (s : ℝ) (hs : 0 ≤ s) :
+    0 < Section6.N_transformed A s := by
+  dsimp [Section6.N_transformed]
+  have hc : 0 < Section6.c A := by
+    dsimp [Section6.c]; linarith
+  have hA_pos : 0 < A := by linarith
+  have h_quad := Section6.quad_coeff_pos A (ne_of_gt hA_pos)
+
+  have h_term1 : 0 ≤ (5 * A^2 - 4 * A + 1) * s^2 :=
+    mul_nonneg (le_of_lt h_quad) (sq_nonneg s)
+  have h_term2 : 0 ≤ (2 * A * (1 - A) * (3 * A - 1) / Section6.c A) * s := by
+    have h_num : 0 < 2 * A * (1 - A) * (3 * A - 1) := by
+      have : 0 < 2 * A := by linarith
+      have : 0 < 1 - A := by linarith
+      have : 0 < 3 * A - 1 := by linarith
+      positivity
+    have h_coeff : 0 < 2 * A * (1 - A) * (3 * A - 1) / Section6.c A := div_pos h_num hc
+    exact mul_nonneg (le_of_lt h_coeff) hs
+  have h_term3 : 0 < (A * (2 - 3 * A) * (3 * A - 1)^2) / (Section6.c A)^2 := by
+    have h_num : 0 < A * (2 - 3 * A) * (3 * A - 1)^2 := by
+      have : 0 < A := by linarith
+      have : 0 < 2 - 3 * A := by linarith
+      have : 0 < (3 * A - 1)^2 := sq_pos_of_ne_zero (ne_of_gt (by linarith))
+      positivity
+    have h_den : 0 < (Section6.c A)^2 := sq_pos_of_ne_zero (ne_of_gt hc)
+    exact div_pos h_num h_den
+
+  linarith
+
+/-- 
+N(A, L) is strictly positive on the entire geometric range L = A/c + s with s ≥ 0.
+-/
+theorem N_pos_of_L (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2) (s : ℝ) (hs : 0 ≤ s) :
+    0 < Section6.N A (A / Section6.c A + s) := by
+  have hc : Section6.c A ≠ 0 := by
+    dsimp [Section6.c]; linarith
+  rw [Section6.N_identity A s hc]
+  exact N_transformed_pos A hA1 hA2 s hs
+
+/-! 17.3 The Discrete Cycle Average Exceeds the Phase Minimum -/
+
+/-- The discrete cycle average contraction rate C(A, L) = V / (L - 1). -/
+noncomputable def cycle_avg (A B : ℝ) : ℝ :=
+  Section6.V A B / (Section6.L A B - 1)
+
+/-- 
+Exact algebraic difference identity (Equation 44):
+  C(A, L) - D(q₂) = N(A, L) / ((L - 1)(L(1 - A) + c)).
+-/
+theorem cycle_avg_sub_D_q2_eq (hA_ne : A ≠ 0)
+    (h_denom : A * (1 + B) - B ≠ 0)
+    (hLm1 : Section6.L A B - 1 ≠ 0)
+    (hq2_ne : Section6.q2 A B ≠ 0) :
+    cycle_avg A B - D_q2 A B =
+    Section6.N A (Section6.L A B) / ((Section6.L A B - 1) * (Section6.q2 A B)) := by
+  have h_ratio := Section6.Pd_q2_ratio A B h_denom hq2_ne
+  have hq2_eq := Section6.q2_eq_c_add_x_add_H A B
+  have hV_eq := Section6.V_eq A B
+  dsimp [cycle_avg, D_q2]
+  rw [hV_eq]
+  dsimp [Section6.x, Section6.H, Section6.c, Section6.d0, Section6.N] at hq2_eq h_ratio ⊢
+  generalize hL : Section6.L A B = L_val
+  generalize hq : Section6.q2 A B = q2_val
+  rw [hL] at hLm1 hq2_eq h_ratio
+  rw [hq] at hq2_ne hq2_eq h_ratio 
+  rw [← h_ratio]
+  have h_prod_ne : (L_val - 1) * q2_val ≠ 0 := mul_ne_zero hLm1 hq2_ne
+  have h_A_prod_ne : A * (L_val - 1) ≠ 0 := mul_ne_zero hA_ne hLm1
+  field_simp [hA_ne, hLm1, hq2_ne, h_prod_ne, h_A_prod_ne]
+  rw [hq2_eq]
+  ring
+
+/-- 
+THE MASTER COMPARISON THEOREM:
+The discrete cycle-averaged contraction rate C(A, L) is strictly greater than 
+the continuous phase minimum D(q₂).
+-/
+theorem cycle_avg_ge_D_q2 (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A)
+    (hL_gt_one : 1 < Section6.L A B)
+    (hA_ne : A ≠ 0)
+    (h_denom : A * (1 + B) - B ≠ 0)
+    (hq2_pos : 0 < Section6.q2 A B) :
+    D_q2 A B ≤ cycle_avg A B := by
+  have hc_pos := c_pos A hA2
+  have hA_lt1 : A < 1 := by linarith
+  have h_feas_denom : 0 < A * (1 + B) - B := (Section5.denominator_pos_iff A B hA_lt1).mpr hB_star
+  have h_feas := (Section5.feasibility_equivalence A B h_feas_denom).mpr hB
+  have h_x_ge_A : A ≤ Section6.L A B * Section6.c A := by
+    dsimp [Section6.c, Section5.c, Section6.L, Section5.L] at *
+    exact h_feas
+  have hs_nonneg : 0 ≤ Section6.L A B - A / Section6.c A := by
+    rw [sub_nonneg, div_le_iff₀ hc_pos]
+    exact h_x_ge_A
+
+  set s := Section6.L A B - A / Section6.c A
+  have hL_eq : Section6.L A B = A / Section6.c A + s := by ring
+
+  have hN_pos : 0 < Section6.N A (Section6.L A B) := by
+    rw [hL_eq]
+    exact N_pos_of_L A hA1 hA2 s hs_nonneg
+
+  have hLm1_pos : 0 < Section6.L A B - 1 := by linarith [hL_gt_one]
+  have h_diff := cycle_avg_sub_D_q2_eq A B hA_ne h_denom (ne_of_gt hLm1_pos) (ne_of_gt hq2_pos)
+  have h_diff_pos : 0 < cycle_avg A B - D_q2 A B := by
+    rw [h_diff]
+    exact div_pos hN_pos (mul_pos hLm1_pos hq2_pos)
+
+  linarith [h_diff_pos]
+
+/-! 17.4 Evaluation on the Constructive 4-Piece Cycle -/
+
+theorem len1_nonneg (hA2 : A < 1 / 2) (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    0 ≤ Section6.len1 A B := by
+  have hA_lt1 : A < 1 := by linarith
+  have h_fdenom : 0 < A * (1 + B) - B := (Section5.denominator_pos_iff A B hA_lt1).mpr hB_star
+  have h_feas : A ≤ Section5.L A B * Section5.c A := (Section5.feasibility_equivalence A B h_fdenom).mpr hB
+  dsimp [Section5.L, Section5.c, Section6.L, Section6.c, Section6.x, Section6.len1] at *
+  linarith
+
+theorem len2_nonneg (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2) (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    0 ≤ Section6.len2 A B := by
+  dsimp [Section6.len2]
+  have := x_le_H A B hA1 hA2 hB hB_star
+  linarith
+
+theorem len3_nonneg (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2) (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    0 ≤ Section6.len3 A B := by
+  dsimp [Section6.len3]
+  have := c_le_x A B hA1 hA2 hB hB_star
+  linarith
+
+theorem len4_nonneg (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2) (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    0 ≤ Section6.len4 A B := by
+  dsimp [Section6.len4]
+  have := x_le_H A B hA1 hA2 hB hB_star
+  linarith
+
+/-- Total contraction mass sum_delta matches Section6.V A B. -/
+theorem pieces_sum_delta_eq
+    (h1 : 0 ≤ Section6.len1 A B) (h2 : 0 ≤ Section6.len2 A B)
+    (h3 : 0 ≤ Section6.len3 A B) (h4 : 0 ≤ Section6.len4 A B) :
+    sum_delta (ConstructiveSection6.pieces A B h1 h2 h3 h4) = Section6.V A B := by
+  dsimp [ConstructiveSection6.pieces, sum_delta,
+         ConstructiveSection6.piece1, ConstructiveSection6.piece2,
+         ConstructiveSection6.piece3, ConstructiveSection6.piece4,
+         Section6.V, Section6.rate1, Section6.rate2, Section6.rate3, Section6.rate4]
+  ring
+
+/-- The discrete average contraction rate matches cycle_avg(A, B). -/
+theorem pieces_avg_contraction_eq
+    (h1 : 0 ≤ Section6.len1 A B) (h2 : 0 ≤ Section6.len2 A B)
+    (h3 : 0 ≤ Section6.len3 A B) (h4 : 0 ≤ Section6.len4 A B) :
+    sum_delta (ConstructiveSection6.pieces A B h1 h2 h3 h4) /
+    sum_len (ConstructiveSection6.pieces A B h1 h2 h3 h4) = cycle_avg A B := by
+  rw [pieces_sum_delta_eq A B h1 h2 h3 h4]
+  rw [ConstructiveSection6.sum_of_lengths_eq A B h1 h2 h3 h4]
+  rfl
+
+/-- 
+THE CONTRACTION BOUND WITNESS:
+The discrete average contraction rate of the constructive 4-piece cycle 
+is bounded below by D_low(U, W).
+-/
+theorem pieces_avg_contraction_ge_D_low
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A)
+    (hL_gt_one : 1 < Section6.L A B)
+    (hA_ne : A ≠ 0)
+    (h_denom : A * (1 + B) - B ≠ 0)
+    (hq2_pos : 0 < Section6.q2 A B)
+    (hA_eq : A = U / (1 + U)) (hB_eq : B = W / (1 + W))
+    (h_UW_denom : U * (W + 1) * (2 * (1 - U) * W - U) ≠ 0)
+    (h1 : 0 ≤ Section6.len1 A B) (h2 : 0 ≤ Section6.len2 A B)
+    (h3 : 0 ≤ Section6.len3 A B) (h4 : 0 ≤ Section6.len4 A B) :
+    Section1.D_low U W ≤
+    sum_delta (ConstructiveSection6.pieces A B h1 h2 h3 h4) /
+    sum_len (ConstructiveSection6.pieces A B h1 h2 h3 h4) := by
+  rw [pieces_avg_contraction_eq A B h1 h2 h3 h4]
+  have h_ge := cycle_avg_ge_D_q2 A B hA1 hA2 hB hB_star hL_gt_one hA_ne h_denom hq2_pos
+  have h_eq := D_q2_eq_D_low A B U W hA_eq hB_eq h_denom hA_ne h_UW_denom
+  linarith [h_ge, h_eq]
+
+/-! 17.5 Asymptotic Continuous Integral Lower Bound -/
+
+/-- 
+The continuous contraction integral average over [0, q] for any time q ≥ 1
+is bounded below by the global phase minimum D(q₂).
+-/
+theorem running_phase_avg_ge_D_q2
+    (D_cont : ℝ → ℝ) (L : ℝ) (hL : 1 < L) (q2 : ℝ)
+    (h_per : IsMultiplicativelyPeriodic D_cont L)
+    (hq2_min : IsFirstPeriodMinimum D_cont L q2)
+    (q : ℝ) (hq : 1 ≤ q) :
+    D_cont q2 ≤ D_cont q :=
+  constructive_global_minimum_at_q2 D_cont L hL q2 h_per hq2_min q hq
+
+/-! 17.6 Direct Wiring into the DFSU Lower Bound Bridge -/
+
+/-- 
+WIRED LOWER BOUND BRIDGE FOR REMAINING RANGE:
+Directly packages the continuous phase minimum D(q₂) and discrete cycle average 
+into the DFSU witness system, fulfilling the analytical calculus requirements.
+-/
+theorem remaining_range_lower_bound_wired
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A)
+    (hL_gt_one : 1 < Section6.L A B)
+    (hA_ne : A ≠ 0)
+    (h_denom : A * (1 + B) - B ≠ 0)
+    (hq2_pos : 0 < Section6.q2 A B)
+    (hA_eq : A = U / (1 + U)) (hB_eq : B = W / (1 + W))
+    (h_UW_denom : U * (W + 1) * (2 * (1 - U) * W - U) ≠ 0)
+    (h_exp : sum_Pd_change (ConstructiveSection6.pieces A B
+      (len1_nonneg A B hA2 hB hB_star)
+      (len2_nonneg A B hA1 hA2 hB hB_star)
+      (len3_nonneg A B hA1 hA2 hB hB_star)
+      (len4_nonneg A B hA1 hA2 hB hB_star)) /
+      sum_len (ConstructiveSection6.pieces A B
+      (len1_nonneg A B hA2 hB hB_star)
+      (len2_nonneg A B hA1 hA2 hB hB_star)
+      (len3_nonneg A B hA1 hA2 hB hB_star)
+      (len4_nonneg A B hA1 hA2 hB hB_star)) = W / (1 + W)) :
+    ∃ P : DeductiveBridges.GeneralizedSystem 2,
+      DeductiveBridges.has_exponents P U W ∧
+      Section1.D_low U W ≤ DeductiveBridges.avg_contraction P := by
+  have h1 := len1_nonneg A B hA2 hB hB_star
+  have h2 := len2_nonneg A B hA1 hA2 hB hB_star
+  have h3 := len3_nonneg A B hA1 hA2 hB hB_star
+  have h4 := len4_nonneg A B hA1 hA2 hB hB_star
+  have h_rate := pieces_avg_contraction_ge_D_low A B U W
+    hA1 hA2 hB hB_star hL_gt_one hA_ne h_denom hq2_pos hA_eq hB_eq h_UW_denom h1 h2 h3 h4
+  have h_len_pos : 0 < Section6.L A B - 1 := by linarith [hL_gt_one]
+  let P := ConstructiveBridges.construct_remaining_range_template A B h_len_pos h1 h2 h3 h4
+  refine ⟨P, h_exp, h_rate⟩
+
+end PhaseMinimumToDFSU
