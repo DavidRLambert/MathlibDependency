@@ -3816,3 +3816,145 @@ theorem patchTrajectory_average_rate_ge (hm : 3 ≤ m)
   exact div_le_div_of_nonneg_right h_delta (le_of_lt h_T_pos)
 
 end TrajectoryNormalForm
+
+/-!
+ Section 15: Unified Main Theorems (Namespace Integration & Deductive Wiring)
+
+ This section unifies the top-level dimension theorems directly with the
+ concrete `GeneralizedSystem` structure and the proven bridge theorems in
+ `DeductiveBridges` and `ConstructiveBridges`, eliminating reliance on the
+ placeholder axioms in Section 1.
+-/
+
+namespace UnifiedTheorems
+
+open LinearPiece
+open Section4
+open Section6
+open Section7
+open GlobalRenewalLimit
+open DeductiveBridges
+open ConstructiveBridges
+
+variable (m : ℕ) [hm : NeZero m]
+variable (U W : ℝ)
+
+/-- Universal Large-W target dimension formula (Equation 3): m / (1 + W). -/
+noncomputable def LargeW_Target (m : ℕ) (W : ℝ) : ℝ := (m : ℝ) / (1 + W)
+
+/-- Remaining-Range dimension formula for m = 2 (Equation 4). -/
+noncomputable def D_low (U W : ℝ) : ℝ :=
+  ((1 - U) * (2 * U - 1) * W^2 + U * (5 - 6 * U) * W - 2 * U^2) /
+  (U * (W + 1) * (2 * (1 - U) * W - U))
+
+/--
+Theorem 1.1 (Large-W Dimension Formula for all m ≥ 2):
+Directly wired to `DeductiveBridges.upper_bound_bridge_large_W` and
+`DeductiveBridges.lower_bound_bridge_large_W` via the variational principle `dfsu_sandwich`.
+-/
+theorem theorem_1_1
+    (_hU_lower : 1 / (m : ℝ) < U)
+    (_hU_upper : U < 1 / ((m : ℝ) - 1))
+    (_hW_lower : U / (((m : ℝ) - 1) * (1 - ((m : ℝ) - 1) * U)) ≤ W)
+    (hW_pos : 0 ≤ W)
+    (h_template : ∃ x, 0 < Section4.L m U W x - 1 ∧
+      (∀ p ∈ Section4.pieces m U W x, 0 ≤ (p : LinearPiece m).defect) ∧
+      sum_Pd_change (Section4.pieces m U W x) / sum_len (Section4.pieces m U W x) = W / (1 + W) ∧
+      (m : ℝ) / (1 + W) ≤ sum_delta (Section4.pieces m U W x) / sum_len (Section4.pieces m U W x)) :
+    DeductiveBridges.dim_H_E m U W = LargeW_Target m W := by
+  have upper := DeductiveBridges.upper_bound_bridge_large_W m U W hW_pos
+  have lower := DeductiveBridges.lower_bound_bridge_large_W m U W h_template
+  exact DeductiveBridges.dfsu_sandwich m (LargeW_Target m W) U W upper lower
+
+/--
+Theorem 1.2 (Complete Dimension Spectrum for m = 2):
+Directly wired to the proven upper and lower bridge theorems for both the
+large-W regime and the discrete renewal remaining range.
+-/
+theorem theorem_1_2
+    (hW_pos : 0 ≤ W)
+    (h_large_template : ∃ x, 0 < Section4.L 2 U W x - 1 ∧
+      (∀ p ∈ Section4.pieces 2 U W x, 0 ≤ (p : LinearPiece 2).defect) ∧
+      sum_Pd_change (Section4.pieces 2 U W x) / sum_len (Section4.pieces 2 U W x) = W / (1 + W) ∧
+      (2 : ℝ) / (1 + W) ≤ sum_delta (Section4.pieces 2 U W x) / sum_len (Section4.pieces 2 U W x))
+    (h_D_low_def : D_low U W = 2 / (1 + W) - DeductiveBridges.remaining_range_defect_bound U W)
+    (h_defect_bound : ∀ P : DeductiveBridges.GeneralizedSystem 2,
+      DeductiveBridges.has_exponents P U W →
+      DeductiveBridges.remaining_range_defect_bound U W ≤ sum_defect P.period / sum_len P.period)
+    (h_rem_cycle : ∃ A B, 0 < Section6.L A B - 1 ∧
+      (∀ p ∈ Section6.pieces A B, 0 ≤ (p : LinearPiece 2).defect) ∧
+      sum_Pd_change (Section6.pieces A B) / sum_len (Section6.pieces A B) = W / (1 + W) ∧
+      D_low U W ≤ sum_delta (Section6.pieces A B) / sum_len (Section6.pieces A B)) :
+    (U / (1 - U) ≤ W → DeductiveBridges.dim_H_E 2 U W = LargeW_Target 2 W) ∧
+    (W ≤ U / (1 - U) → DeductiveBridges.dim_H_E 2 U W = D_low U W) := by
+  constructor
+  · intro _
+    have upper := DeductiveBridges.upper_bound_bridge_large_W 2 U W hW_pos
+    have lower := DeductiveBridges.lower_bound_bridge_large_W 2 U W h_large_template
+    exact DeductiveBridges.dfsu_sandwich 2 (LargeW_Target 2 W) U W upper lower
+  · intro _
+    have upper := DeductiveBridges.upper_bound_bridge_remaining_range U W hW_pos (D_low U W) h_D_low_def h_defect_bound
+    have lower := DeductiveBridges.lower_bound_bridge_remaining_range U W (D_low U W) h_rem_cycle
+    exact DeductiveBridges.dfsu_sandwich 2 (D_low U W) U W upper lower
+
+/--
+Theorem 1.1 (Constructively Witnessed Variant):
+Uses the concrete 5-piece piecewise-linear trajectory constructed in `ConstructiveBridges`.
+-/
+theorem theorem_1_1_constructive
+    (hW_pos : 0 ≤ W)
+    (h_template : ∃ x, 0 < Section4.L m U W x - 1 ∧
+      Section4.alpha U ≠ 0 ∧
+      (∃ (h1 : 0 ≤ Section4.len1 m U x) (h2 : 0 ≤ Section4.len2 m U W x)
+         (h3 : 0 ≤ Section4.len3 m U x) (h4 : 0 ≤ Section4.len4 m U W x)
+         (h5 : 0 ≤ Section4.len5 m U W x),
+        sum_Pd_change (ConstructiveSection4.pieces m U W x h1 h2 h3 h4 h5) /
+          sum_len (ConstructiveSection4.pieces m U W x h1 h2 h3 h4 h5) = W / (1 + W) ∧
+        (m : ℝ) / (1 + W) ≤
+          sum_delta (ConstructiveSection4.pieces m U W x h1 h2 h3 h4 h5) /
+          sum_len (ConstructiveSection4.pieces m U W x h1 h2 h3 h4 h5))) :
+    DeductiveBridges.dim_H_E m U W = LargeW_Target m W := by
+  have upper := DeductiveBridges.upper_bound_bridge_large_W m U W hW_pos
+  have lower := ConstructiveBridges.lower_bound_bridge_large_W m U W h_template
+  exact DeductiveBridges.dfsu_sandwich m (LargeW_Target m W) U W upper lower
+
+/--
+Theorem 1.2 (Constructively Witnessed Variant):
+Uses the concrete 4-piece periodic cycle constructed in `ConstructiveBridges`.
+-/
+theorem theorem_1_2_constructive
+    (hW_pos : 0 ≤ W)
+    (h_large_template : ∃ x, 0 < Section4.L 2 U W x - 1 ∧
+      Section4.alpha U ≠ 0 ∧
+      (∃ (h1 : 0 ≤ Section4.len1 2 U x) (h2 : 0 ≤ Section4.len2 2 U W x)
+         (h3 : 0 ≤ Section4.len3 2 U x) (h4 : 0 ≤ Section4.len4 2 U W x)
+         (h5 : 0 ≤ Section4.len5 2 U W x),
+        sum_Pd_change (ConstructiveSection4.pieces 2 U W x h1 h2 h3 h4 h5) /
+          sum_len (ConstructiveSection4.pieces 2 U W x h1 h2 h3 h4 h5) = W / (1 + W) ∧
+        (2 : ℝ) / (1 + W) ≤
+          sum_delta (ConstructiveSection4.pieces 2 U W x h1 h2 h3 h4 h5) /
+          sum_len (ConstructiveSection4.pieces 2 U W x h1 h2 h3 h4 h5)))
+    (h_D_low_def : D_low U W = 2 / (1 + W) - DeductiveBridges.remaining_range_defect_bound U W)
+    (h_defect_bound : ∀ P : DeductiveBridges.GeneralizedSystem 2,
+      DeductiveBridges.has_exponents P U W →
+      DeductiveBridges.remaining_range_defect_bound U W ≤ sum_defect P.period / sum_len P.period)
+    (h_rem_cycle : ∃ A B, 0 < Section6.L A B - 1 ∧
+      (∃ (h1 : 0 ≤ Section6.len1 A B) (h2 : 0 ≤ Section6.len2 A B)
+         (h3 : 0 ≤ Section6.len3 A B) (h4 : 0 ≤ Section6.len4 A B),
+        sum_Pd_change (ConstructiveSection6.pieces A B h1 h2 h3 h4) /
+          sum_len (ConstructiveSection6.pieces A B h1 h2 h3 h4) = W / (1 + W) ∧
+        D_low U W ≤ sum_delta (ConstructiveSection6.pieces A B h1 h2 h3 h4) /
+          sum_len (ConstructiveSection6.pieces A B h1 h2 h3 h4))) :
+    (U / (1 - U) ≤ W → DeductiveBridges.dim_H_E 2 U W = LargeW_Target 2 W) ∧
+    (W ≤ U / (1 - U) → DeductiveBridges.dim_H_E 2 U W = D_low U W) := by
+  constructor
+  · intro _
+    have upper := DeductiveBridges.upper_bound_bridge_large_W 2 U W hW_pos
+    have lower := ConstructiveBridges.lower_bound_bridge_large_W 2 U W h_large_template
+    exact DeductiveBridges.dfsu_sandwich 2 (LargeW_Target 2 W) U W upper lower
+  · intro _
+    have upper := DeductiveBridges.upper_bound_bridge_remaining_range U W hW_pos (D_low U W) h_D_low_def h_defect_bound
+    have lower := ConstructiveBridges.lower_bound_bridge_remaining_range U W (D_low U W) h_rem_cycle
+    exact DeductiveBridges.dfsu_sandwich 2 (D_low U W) U W upper lower
+
+end UnifiedTheorems
