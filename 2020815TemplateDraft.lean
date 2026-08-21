@@ -3163,3 +3163,222 @@ theorem constructive_global_maximum_at_q_max (D : ℝ → ℝ) (L : ℝ) (hL : 1
   exact hq_max (base_phase L hL q hq) bounds.1 bounds.2
 
 end ConstructiveGlobalPeriodicExtension
+
+/-!
+ Section 13: Contact Sets & Excursion Topology for m = 2
+ Formalization of the continuous contact sets Z_- = {q : P₁(q) = P₂(q)} and
+ Z_+ = {q : P₂(q) = P₃(q)}, proving that on an open excursion interval (r_{k-1}, t_k),
+ P₂ < P₃ strictly holds, which forbids the [2, 3] block and forces x ≤ y.
+-/
+
+namespace ExcursionTopology
+
+open Set
+
+/-!  13.1 Continuous Trajectory Definition & Contact Loci -/
+
+/-- A continuous 3-coordinate template trajectory P = (P₁, P₂, P₃) for m = 2. -/
+structure ContinuousTrajectory2 where
+  P1 : ℝ → ℝ
+  P2 : ℝ → ℝ
+  P3 : ℝ → ℝ
+  h_cont1 : Continuous P1
+  h_cont2 : Continuous P2
+  h_cont3 : Continuous P3
+  -- Simplex and coordinate ordering constraints
+  h_order : ∀ q, 0 ≤ P1 q ∧ P1 q ≤ P2 q ∧ P2 q ≤ P3 q
+  h_sum : ∀ q, P1 q + P2 q + P3 q = q
+  -- Coordinate monotonicity: each P_i is non-decreasing along trajectories
+  h_mono1 : Monotone P1
+  h_mono2 : Monotone P2
+  h_mono3 : Monotone P3
+
+namespace ContinuousTrajectory2
+
+variable (P : ContinuousTrajectory2)
+
+/-- The lower-contact locus Z_- := {q : P₁(q) = P₂(q)}. -/
+def Z_minus : Set ℝ := {q | P.P1 q = P.P2 q}
+
+/-- The upper-contact locus Z_+ := {q : P₂(q) = P₃(q)}. -/
+def Z_plus : Set ℝ := {q | P.P2 q = P.P3 q}
+
+/-- Z_- is a closed set by continuity of P₁ and P₂. -/
+theorem isClosed_Z_minus : IsClosed (Z_minus P) := by
+  dsimp [Z_minus]
+  exact isClosed_eq P.h_cont1 P.h_cont2
+
+/-- Z_+ is a closed set by continuity of P₂ and P₃. -/
+theorem isClosed_Z_plus : IsClosed (Z_plus P) := by
+  dsimp [Z_plus]
+  exact isClosed_eq P.h_cont2 P.h_cont3
+
+/-!  13.2 Excursion Intervals & Strict Coordinate Ordering -/
+
+/-- 
+An open excursion interval (r, t) between consecutive renewal times 
+that is disjoint from the upper-contact set Z_+.
+-/
+def IsExcursionInterval (r t : ℝ) : Prop :=
+  r < t ∧ (Ioo r t ∩ Z_plus P = ∅)
+
+/-- 
+TOPOLOGICAL ORDERING ON EXCURSIONS:
+On any open excursion interval (r, t) disjoint from Z_+, 
+the strict inequality P₂(q) < P₃(q) holds everywhere.
+-/
+theorem P2_lt_P3_on_excursion {r t : ℝ} (h_exc : IsExcursionInterval P r t) :
+    ∀ q ∈ Ioo r t, P.P2 q < P.P3 q := by
+  intro q hq
+  have h_le : P.P2 q ≤ P.P3 q := (P.h_order q).2.2
+  have h_not_in : q ∉ Z_plus P := by
+    intro h_in
+    have h_mem : q ∈ Ioo r t ∩ Z_plus P := ⟨hq, h_in⟩
+    rw [h_exc.2] at h_mem
+    exact h_mem
+  dsimp [Z_plus] at h_not_in
+  exact lt_of_le_of_ne h_le h_not_in
+
+/-!  13.3 Forbidding the Block [2, 3] on Excursions -/
+
+/-- 
+The upper-boundary moving block [2, 3] can only activate when P₂ = P₃.
+-/
+def Block23CanActivate (q : ℝ) : Prop :=
+  q ∈ Z_plus P
+
+/-- 
+THE BLOCK [2, 3] IS FORBIDDEN:
+Because P₂ < P₃ strictly holds throughout the open excursion interval (r, t),
+the moving block [2, 3] cannot activate at any point in (r, t).
+-/
+theorem block_23_forbidden_on_excursion {r t : ℝ} (h_exc : IsExcursionInterval P r t) :
+    ∀ q ∈ Ioo r t, ¬ Block23CanActivate P q := by
+  intro q hq h_act
+  have h_lt := P2_lt_P3_on_excursion P h_exc q hq
+  dsimp [Block23CanActivate, Z_plus] at h_act
+  linarith
+
+/-!  13.4 Topological Derivation of x ≤ y -/
+
+/-- 
+Upper-contact coordinate decomposition:
+At any upper contact time t ∈ Z_+, P₂(t) = P₃(t) = h and P₁(t) = t - 2h.
+-/
+theorem upper_contact_coords (t : ℝ) (ht : t ∈ Z_plus P) :
+    P.P2 t = P.P3 t ∧ P.P1 t = t - 2 * P.P3 t := by
+  dsimp [Z_plus] at ht
+  have h_sum := P.h_sum t
+  constructor
+  · exact ht
+  · linarith [h_sum, ht]
+
+/-- 
+DERIVATION OF x ≤ y:
+Let q* be the time when P reaches peak height P₃(q*) = h and intermediate coordinate x = P₂(q*).
+Before the terminal upper contact at t_{k+1}, the trajectory passes through an intermediate 
+lower contact ρ where P₁(ρ) = P₂(ρ). Monotonicity of P₁ and P₂ along [q*, ρ] and [ρ, t_{k+1}] 
+forces x ≤ y = P₁(t_{k+1}).
+-/
+theorem x_le_y_of_monotone_excursion
+    {q_star rho t_k1 : ℝ}
+    (h_q_le_rho : q_star ≤ rho)
+    (h_rho_le_tk1 : rho ≤ t_k1)
+    (h_rho_lower : P.P1 rho = P.P2 rho)
+    (x y : ℝ)
+    (h_q_P2 : P.P2 q_star = x)
+    (h_tk1_P1 : P.P1 t_k1 = y) :
+    x ≤ y := by
+  have h_P1_mono : P.P1 rho ≤ P.P1 t_k1 := P.h_mono1 h_rho_le_tk1
+  have h_P2_mono : P.P2 q_star ≤ P.P2 rho := P.h_mono2 h_q_le_rho
+  rw [h_rho_lower] at h_P1_mono
+  rw [h_tk1_P1] at h_P1_mono
+  rw [h_q_P2] at h_P2_mono
+  linarith
+
+/-!  13.5 Geometric Bridge to Excursion Peak Bound -/
+
+/-- 
+Denominator comparison under the topological constraint x ≤ y:
+u + x + h ≤ u + y + h.
+-/
+theorem peak_denominator_le (u x y h : ℝ) (h_xy : x ≤ y) :
+    u + x + h ≤ u + y + h := by
+  linarith
+
+/-- 
+Excursion Peak Ratio Bound (Equation 60):
+If P₃(q*)/q* ≤ b with q* = u + x + h and x ≤ y, then h / (u + y + h) ≤ b.
+-/
+theorem excursion_peak_ratio_derived
+    (u x y h b : ℝ)
+    (h_xy : x ≤ y)
+    (h_h_nonneg : 0 ≤ h)
+    (h_denom_pos : 0 < u + x + h)
+    (h_ratio_star : h / (u + x + h) ≤ b) :
+    h / (u + y + h) ≤ b := by
+  have h_den_le : u + x + h ≤ u + y + h := peak_denominator_le u x y h h_xy
+  have h_div : h / (u + y + h) ≤ h / (u + x + h) :=
+    div_le_div_of_nonneg_left h_h_nonneg h_denom_pos h_den_le
+  exact le_trans h_div h_ratio_star
+
+/-- 
+Discharging the geometric excursion peak ratio using continuous curve topology:
+Links directly to the formal renewal recurrence in `GeometricRenewal`.
+-/
+theorem discharge_excursion_peak_bound
+    (t_k t_k1 alpha_k alpha_k1 b : ℝ)
+    (x : ℝ)
+    (h_alpha_k1 : 0 ≤ alpha_k1)
+    (ht_k1_pos : 0 ≤ t_k1)
+    (h_xy : x ≤ GeometricRenewal.y_val alpha_k1 t_k1)
+    (h_denom_pos : 0 < GeometricRenewal.u_val alpha_k t_k + x + GeometricRenewal.h_val alpha_k1 t_k1)
+    (h_peak_bound : GeometricRenewal.h_val alpha_k1 t_k1 /
+      (GeometricRenewal.u_val alpha_k t_k + x + GeometricRenewal.h_val alpha_k1 t_k1) ≤ b) :
+    GeometricRenewal.h_val alpha_k1 t_k1 /
+      (GeometricRenewal.u_val alpha_k t_k +
+       GeometricRenewal.y_val alpha_k1 t_k1 +
+       GeometricRenewal.h_val alpha_k1 t_k1) ≤ b := by
+  have h_h_nonneg : 0 ≤ GeometricRenewal.h_val alpha_k1 t_k1 := by
+    dsimp [GeometricRenewal.h_val]
+    exact mul_nonneg h_alpha_k1 ht_k1_pos
+  exact excursion_peak_ratio_derived
+    (GeometricRenewal.u_val alpha_k t_k)
+    x
+    (GeometricRenewal.y_val alpha_k1 t_k1)
+    (GeometricRenewal.h_val alpha_k1 t_k1)
+    b
+    h_xy
+    h_h_nonneg
+    h_denom_pos
+    h_peak_bound
+
+/-- 
+End-to-end integration: Combines continuous trajectory monotonicity with the 
+excursion peak ratio bound to establish the renewal ceiling.
+-/
+theorem continuous_trajectory_excursion_bound
+    {q_star rho t_k t_k1 alpha_k alpha_k1 b : ℝ}
+    (h_q_le_rho : q_star ≤ rho)
+    (h_rho_le_tk1 : rho ≤ t_k1)
+    (h_rho_lower : P.P1 rho = P.P2 rho)
+    (h_tk1_P1 : P.P1 t_k1 = GeometricRenewal.y_val alpha_k1 t_k1)
+    (h_alpha_k1 : 0 ≤ alpha_k1)
+    (ht_k1_pos : 0 ≤ t_k1)
+    (h_denom_pos : 0 < GeometricRenewal.u_val alpha_k t_k + P.P2 q_star + GeometricRenewal.h_val alpha_k1 t_k1)
+    (h_peak_bound : GeometricRenewal.h_val alpha_k1 t_k1 /
+      (GeometricRenewal.u_val alpha_k t_k + P.P2 q_star + GeometricRenewal.h_val alpha_k1 t_k1) ≤ b) :
+    GeometricRenewal.h_val alpha_k1 t_k1 /
+      (GeometricRenewal.u_val alpha_k t_k +
+       GeometricRenewal.y_val alpha_k1 t_k1 +
+       GeometricRenewal.h_val alpha_k1 t_k1) ≤ b := by
+  have h_xy : P.P2 q_star ≤ GeometricRenewal.y_val alpha_k1 t_k1 :=
+    x_le_y_of_monotone_excursion P h_q_le_rho h_rho_le_tk1 h_rho_lower
+      (P.P2 q_star) (GeometricRenewal.y_val alpha_k1 t_k1) rfl h_tk1_P1
+  exact discharge_excursion_peak_bound
+    t_k t_k1 alpha_k alpha_k1 b (P.P2 q_star)
+    h_alpha_k1 ht_k1_pos h_xy h_denom_pos h_peak_bound
+
+end ContinuousTrajectory2
+
+end ExcursionTopology
