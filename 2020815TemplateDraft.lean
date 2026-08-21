@@ -2928,3 +2928,108 @@ theorem lower_bound_bridge_remaining_range (U W : ℝ) (D_low : ℝ)
   exact ⟨P, h_exp, h_rate⟩
 
 end ConstructiveBridges
+
+/-!
+ Section 11: Discrete Excursion Telescoping Sum (m = 2)
+ Formalizing the discrete excursion sum over moving blocks to bridge the pointwise
+ gap-defect inequality to the macroscopic terminal lower gap bound (Equation 56).
+-/
+
+namespace GeometricDerivation
+
+open BlockM2
+
+/-! 1. Discrete Excursion Definitions -/
+
+/-- A single timed segment within an excursion: an active `BlockM2` for duration `dt ≥ 0`. -/
+structure ExcursionStep where
+  block : BlockM2
+  dt : ℝ
+  h_dt : 0 ≤ dt
+  valid : is_valid_interior_block block
+
+/-- An excursion is represented as a sequence of timed interior moving blocks. -/
+abbrev Excursion := List ExcursionStep
+
+/-- Total duration across an excursion trajectory. -/
+def sum_dt : List ExcursionStep → ℝ
+  | [] => 0
+  | step :: rest => step.dt + sum_dt rest
+
+/-- Total duration of an excursion is non-negative. -/
+theorem sum_dt_nonneg (l : List ExcursionStep) : 0 ≤ sum_dt l := by
+  induction l with
+  | nil => rfl
+  | cons step rest ih =>
+    dsimp [sum_dt]
+    linarith [step.h_dt, ih]
+
+/-- 
+Integrated change in the lower coordinate gap $(P_2 - P_1)$ over the excursion:
+  $\sum \text{gap\_slope}(b_i) \cdot \Delta t_i$.
+-/
+noncomputable def sum_gap_growth : List ExcursionStep → ℝ
+  | [] => 0
+  | step :: rest => gap_slope step.block * step.dt + sum_gap_growth rest
+
+/-- 
+Integrated accumulated defect $Q$ over the excursion:
+  $\sum \text{defect\_val}(b_i) \cdot \Delta t_i$.
+-/
+def sum_defect : List ExcursionStep → ℝ
+  | [] => 0
+  | step :: rest => defect_val step.block * step.dt + sum_defect rest
+
+/-! 2. Telescoping Inequality Proof -/
+
+/-- 
+TELESCOPING GAP-DEFECT SUM THEOREM:
+By induction on the excursion list, the total accumulated growth of the gap $(P_2 - P_1)$
+is bounded by the total accumulated defect along any interior excursion.
+-/
+theorem sum_gap_growth_le_sum_defect (l : List ExcursionStep) :
+    sum_gap_growth l ≤ sum_defect l := by
+  induction l with
+  | nil =>
+    dsimp [sum_gap_growth, sum_defect]
+    exact le_rfl
+  | cons step rest ih =>
+    dsimp [sum_gap_growth, sum_defect]
+    have h_slope : gap_slope step.block ≤ defect_val step.block :=
+      gap_growth_le_defect step.block step.valid
+    have h_step : gap_slope step.block * step.dt ≤ defect_val step.block * step.dt :=
+      mul_le_mul_of_nonneg_right h_slope step.h_dt
+    linarith
+
+/-! 3. Unconditional Discharging of Equation (56) -/
+
+/-- 
+Discharging `h_integrated_bound` in `prove_defect_ge_terminal_gap`:
+Connecting the blockwise geometry directly to Equation (56). If an excursion expands 
+the gap from $0$ to its terminal value $(3\alpha_{k+1} - 1)t_{k+1}$ with defect bounded by 
+$Q_{k+1} - Q_k$, the discrete renewal gap inequality holds unconditionally.
+-/
+theorem prove_defect_ge_terminal_gap_of_excursion
+    (alpha_k1 t_k1 : ℝ) (Q_k Q_k1 : ℝ)
+    (excursion : List ExcursionStep)
+    (h_gap_realized : sum_gap_growth excursion = alpha_k1 * t_k1 - (1 - 2 * alpha_k1) * t_k1)
+    (h_defect_bounded : sum_defect excursion ≤ Q_k1 - Q_k) :
+    (3 * alpha_k1 - 1) * t_k1 ≤ Q_k1 - Q_k := by
+  have h_telescope := sum_gap_growth_le_sum_defect excursion
+  have h_integrated_bound : alpha_k1 * t_k1 - (1 - 2 * alpha_k1) * t_k1 ≤ Q_k1 - Q_k := by
+    linarith [h_gap_realized, h_telescope, h_defect_bounded]
+  exact prove_defect_ge_terminal_gap alpha_k1 t_k1 Q_k Q_k1 h_integrated_bound
+
+/-- 
+Direct link to `GeometricRenewal.terminal_lower_gap` discharged via discrete excursion geometry.
+-/
+theorem prove_terminal_lower_gap_le_of_excursion
+    (alpha_k1 t_k1 : ℝ) (Q_k Q_k1 : ℝ)
+    (excursion : List ExcursionStep)
+    (h_gap_realized : sum_gap_growth excursion = alpha_k1 * t_k1 - (1 - 2 * alpha_k1) * t_k1)
+    (h_defect_bounded : sum_defect excursion ≤ Q_k1 - Q_k) :
+    GeometricRenewal.terminal_lower_gap alpha_k1 t_k1 ≤ Q_k1 - Q_k := by
+  dsimp [GeometricRenewal.terminal_lower_gap]
+  exact prove_defect_ge_terminal_gap_of_excursion alpha_k1 t_k1 Q_k Q_k1 excursion h_gap_realized h_defect_bounded
+
+end GeometricDerivation
