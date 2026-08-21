@@ -1684,7 +1684,7 @@ theorem first_renewal_inequality
 
   linarith [h_div, h_split]
 
-/-! ### 7.3.3 Bridge to Uniform Renewal Form -/
+/-!  7.3.3 Bridge to Uniform Renewal Form -/
 
 /-- 
 Uniform recurrence step:
@@ -3033,3 +3033,133 @@ theorem prove_terminal_lower_gap_le_of_excursion
   exact prove_defect_ge_terminal_gap_of_excursion alpha_k1 t_k1 Q_k Q_k1 excursion h_gap_realized h_defect_bounded
 
 end GeometricDerivation
+
+/-!
+ Section 12: Constructive Base Phase and Global Periodic Extension
+ Eliminates the axiomatic base_phase declarations by constructively deriving the integer 
+ power index n such that L^n ≤ q < L^(n+1) and setting q₀ = q / L^n.
+-/
+
+namespace ConstructiveGlobalPeriodicExtension
+
+open Classical
+open GlobalPeriodicExtension
+
+/-!  12.1 Archimedean Power Growth -/
+
+/-- Bernoulli's inequality for real exponents: (1 + x)ⁿ ≥ 1 + n*x for x ≥ 0. -/
+theorem one_add_mul_le_pow (x : ℝ) (hx : 0 ≤ x) (n : ℕ) :
+    1 + (n : ℝ) * x ≤ (1 + x) ^ n := by
+  induction n with
+  | zero => simp
+  | succ n ih =>
+    push_cast
+    rw [pow_succ]
+    have h1 : 0 ≤ 1 + x := by linarith
+    have h2 : 1 + ((n : ℝ) + 1) * x ≤ (1 + (n : ℝ) * x) * (1 + x) := by
+      have : (1 + (n : ℝ) * x) * (1 + x) = 1 + ((n : ℝ) + 1) * x + (n : ℝ) * x ^ 2 := by ring
+      have hx2 : 0 ≤ (n : ℝ) * x ^ 2 := by positivity
+      linarith
+    have h3 : (1 + (n : ℝ) * x) * (1 + x) ≤ (1 + x) ^ n * (1 + x) :=
+      mul_le_mul_of_nonneg_right ih h1
+    linarith
+
+/-- Archimedean power bound: For any base L > 1 and scale q, there exists N ∈ ℕ such that q < L^N. -/
+theorem exists_pow_gt (L : ℝ) (hL : 1 < L) (q : ℝ) : ∃ N : ℕ, q < L ^ N := by
+  have hx : 0 < L - 1 := by linarith
+  obtain ⟨N, hN⟩ := exists_nat_gt (q / (L - 1))
+  use N
+  have h_mul : q < (N : ℝ) * (L - 1) := (div_lt_iff₀ hx).mp hN
+  have h_le : 1 + (N : ℝ) * (L - 1) ≤ L ^ N := by
+    have h_bern := one_add_mul_le_pow (L - 1) (le_of_lt hx) N
+    have h_eq : 1 + (L - 1) = L := by ring
+    rwa [h_eq] at h_bern
+  linarith
+
+/-!  12.2 Constructive Logarithmic Index -/
+
+/-- The unique integer power index n = ⌊log_L(q)⌋ for q ≥ 1 and L > 1. -/
+noncomputable def base_nat (L : ℝ) (hL : 1 < L) (q : ℝ) (_hq : 1 ≤ q) : ℕ :=
+  Nat.find (exists_pow_gt L hL q) - 1
+
+/-- Specification theorem: L^n ≤ q < L^(n+1). -/
+theorem base_nat_spec (L : ℝ) (hL : 1 < L) (q : ℝ) (hq : 1 ≤ q) :
+    L ^ (base_nat L hL q hq) ≤ q ∧ q < L ^ (base_nat L hL q hq + 1) := by
+  dsimp [base_nat]
+  set k := Nat.find (exists_pow_gt L hL q)
+  have hk_spec : q < L ^ k := Nat.find_spec (exists_pow_gt L hL q)
+  have hk_pos : 0 < k := by
+    by_contra h_zero
+    have hk0 : k = 0 := by omega
+    rw [hk0, pow_zero] at hk_spec
+    linarith
+  have hk_eq : k = k - 1 + 1 := by omega
+  constructor
+  · have h_not_lt := Nat.find_min (exists_pow_gt L hL q) (by omega : k - 1 < k)
+    push Not at h_not_lt
+    exact h_not_lt
+  · rw [← hk_eq]
+    exact hk_spec
+
+/-!  12.3 Constructive Base Phase Definition & Boundary Reduction -/
+
+/-- Constructive definition of the base phase q₀ := q / L^n. -/
+noncomputable def base_phase (L : ℝ) (hL : 1 < L) (q : ℝ) (hq : 1 ≤ q) : ℝ :=
+  q / (L ^ (base_nat L hL q hq))
+
+/-- The constructive base phase falls strictly inside the fundamental period [1, L]. -/
+theorem base_phase_bounds (L : ℝ) (hL : 1 < L) (q : ℝ) (hq : 1 ≤ q) :
+    1 ≤ base_phase L hL q hq ∧ base_phase L hL q hq ≤ L := by
+  dsimp [base_phase]
+  obtain ⟨h_le, h_lt⟩ := base_nat_spec L hL q hq
+  have hL_pos : 0 < L := by linarith
+  have h_pow_pos : 0 < L ^ (base_nat L hL q hq) := pow_pos hL_pos _
+  have h_pow_succ : L ^ (base_nat L hL q hq + 1) = L ^ (base_nat L hL q hq) * L := by
+    rw [pow_succ]
+  constructor
+  · rw [le_div_iff₀ h_pow_pos]
+    linarith
+  · rw [div_le_iff₀ h_pow_pos]
+    linarith [h_lt, h_pow_succ]
+
+/-- Scale invariance identity: D(q) = D(base_phase(q)) via iterated periodicity. -/
+theorem base_phase_eq (D : ℝ → ℝ) (L : ℝ) (hL : 1 < L)
+    (h_per : IsMultiplicativelyPeriodic D L) (q : ℝ) (hq : 1 ≤ q) :
+    D q = D (base_phase L hL q hq) := by
+  set n := base_nat L hL q hq
+  set q0 := base_phase L hL q hq
+  have hL_pos : 0 < L := by linarith
+  have h_pow_pos : 0 < L ^ n := pow_pos hL_pos n
+  have h_pow_ne : L ^ n ≠ 0 := ne_of_gt h_pow_pos
+  have h_q_eq : q = (L ^ n) * q0 := by
+    dsimp [q0, base_phase]
+    rw [mul_div_cancel₀ q h_pow_ne]
+  have h_bounds := base_phase_bounds L hL q hq
+  have hq0_pos : 0 < q0 := by linarith [h_bounds.1]
+  have h_scale := D_scale_inv_pow D L hL h_per n q0 hq0_pos
+  rw [h_q_eq]
+  exact h_scale
+
+/-!  12.4 Fully Constructive Global Extrema Theorems -/
+
+/-- Fully constructive proof that the first-period minimum is the global infimum for all q ≥ 1. -/
+theorem constructive_global_minimum_at_q2 (D : ℝ → ℝ) (L : ℝ) (hL : 1 < L) (q2 : ℝ)
+    (h_per : IsMultiplicativelyPeriodic D L)
+    (hq2_min : IsFirstPeriodMinimum D L q2) (q : ℝ) (hq : 1 ≤ q) :
+    D q2 ≤ D q := by
+  have h_eq := base_phase_eq D L hL h_per q hq
+  rw [h_eq]
+  have bounds := base_phase_bounds L hL q hq
+  exact hq2_min (base_phase L hL q hq) bounds.1 bounds.2
+
+/-- Fully constructive proof that the first-period maximum is the global supremum for all q ≥ 1. -/
+theorem constructive_global_maximum_at_q_max (D : ℝ → ℝ) (L : ℝ) (hL : 1 < L) (q_max : ℝ)
+    (h_per : IsMultiplicativelyPeriodic D L)
+    (hq_max : IsFirstPeriodMaximum D L q_max) (q : ℝ) (hq : 1 ≤ q) :
+    D q ≤ D q_max := by
+  have h_eq := base_phase_eq D L hL h_per q hq
+  rw [h_eq]
+  have bounds := base_phase_bounds L hL q hq
+  exact hq_max (base_phase L hL q hq) bounds.1 bounds.2
+
+end ConstructiveGlobalPeriodicExtension
