@@ -1399,126 +1399,6 @@ theorem lower_bound_of_unrolled (hL_gt_one : 1 < L)
 
 end GlobalRenewalLimit
 
-/-!
- Section 1: Statement and Conventions (Deductively Wired)
-Replacing tautological placeholders with direct applications of our 
-verified piecewise-linear algebra.
--/
-
-namespace Section1
-
-open LinearPiece Section4 Section6 Section7 GlobalRenewalLimit
-
-variable (m : ℕ) [hm : NeZero m]
-variable (U W : ℝ)
-
-/-!  1.1 Target Dimension Formulas -/
-
-/-- The universal Large-W dimension formula (Equation 3): m / (1 + W). -/
-noncomputable def LargeW_Target (m : ℕ) (W : ℝ) : ℝ := (m : ℝ) / (1 + W)
-
-/-- The Remaining-Range dimension formula for m = 2 (Equation 4). -/
-noncomputable def D_low (U W : ℝ) : ℝ :=
-  ((1 - U) * (2 * U - 1) * W^2 + U * (5 - 6 * U) * W - 2 * U^2) /
-  (U * (W + 1) * (2 * (1 - U) * W - U))
-
-/-!  1.2 Abstract DFSU Top-Level Interface -/
-
-opaque GeneralizedSystem (m : ℕ) : Type
-opaque has_exponents {m : ℕ} (P : GeneralizedSystem m) (U W : ℝ) : Prop
-opaque avg_contraction {m : ℕ} (P : GeneralizedSystem m) : ℝ
-opaque dim_H_E (m : ℕ) (U W : ℝ) : ℝ
-
-/-- 
-The DFSU Variational Principle: 
-Dimension is exactly the supremum of valid contraction rates.
--/
-axiom dfsu_sandwich (target : ℝ) :
-  (∀ (P : GeneralizedSystem m), has_exponents P U W → avg_contraction P ≤ target) → 
-  (∃ (P : GeneralizedSystem m), has_exponents P U W ∧ target ≤ avg_contraction P) → 
-  dim_H_E m U W = target
-
-/-!  1.3 Bridging Axioms -/
-
-/-- 
-UPPER BOUND BRIDGE (Large W): 
-Translates the global defect inequality (Section 3) 
-into the universal upper bound on all generalized systems.
--/
-axiom upper_bound_bridge_large_W :
-  (∀ (l : List (LinearPiece m)) (_h_def : ∀ p ∈ l, 0 ≤ p.defect) (_hT : 0 < sum_len l),
-    sum_delta l / sum_len l ≤ (m : ℝ) - (m : ℝ) * (sum_Pd_change l / sum_len l)) →
-  (∀ (P : GeneralizedSystem m), has_exponents P U W → avg_contraction P ≤ LargeW_Target m W)
-
-/-- 
-LOWER BOUND BRIDGE (Large W, m ≥ 2): 
-Translates the 5-piece periodic cycle (Section 4) 
-into a witnessing generalized system.
--/
-axiom lower_bound_bridge_large_W :
-  (∀ (x : ℝ) ,
-    Section4.len1 m U x + Section4.len2 m U W x + Section4.len3 m U x + 
-    Section4.len4 m U W x + Section4.len5 m U W x = Section4.L m U W x - 1) →
-  (∃ (P : GeneralizedSystem m), has_exponents P U W ∧ LargeW_Target m W ≤ avg_contraction P)
-
-/-- 
-LOWER BOUND BRIDGE (m = 2, Remaining Range):
-Translates the 4-piece periodic cycle (Section 6) into a witnessing system in dimension 2.
--/
-axiom lower_bound_bridge_remaining_range :
-  (∀ (A B : ℝ), Section6.len1 A B + Section6.len2 A B + 
-                Section6.len3 A B + Section6.len4 A B = Section6.L A B - 1) →
-  (∃ (P : GeneralizedSystem 2), has_exponents P U W ∧ D_low U W ≤ avg_contraction P)
-
-/-- 
-UPPER BOUND BRIDGE (m = 2, Remaining Range):
-Translates the analytic limit of the renewal recurrence (Section 7) 
-into the global upper bound in dimension 2.
--/
-axiom upper_bound_bridge_remaining_range :
-  (∀ (z : ℕ → ℝ) (L C : ℝ) (_hL : 1 < L) 
-     (_h_renew : ∀ k, z k / L + C ≤ z (k + 1)) (_hz0 : 0 ≤ z 0)
-     (Z : ℝ) (_h_tendsto : Filter.Tendsto z Filter.atTop (nhds Z)),
-    C * (L / (L - 1)) ≤ Z) →
-  (∀ (P : GeneralizedSystem 2), has_exponents P U W → avg_contraction P ≤ D_low U W)
-
-theorem theorem_1_1 
-    (_hU_lower : 1 / (m : ℝ) < U) 
-    (_hU_upper : U < 1 / ((m : ℝ) - 1))
-    (_hW_lower : U / (((m : ℝ) - 1) * (1 - ((m : ℝ) - 1) * U)) ≤ W)
-    (h_alpha : Section4.alpha U ≠ 0) :
-    dim_H_E m U W = LargeW_Target m W := by
-  have upper_bound := upper_bound_bridge_large_W m U W LinearPiece.global_contraction_bound
-  have lower_bound := lower_bound_bridge_large_W m U W (fun x ↦ 
-      Section4.sum_of_lengths m U W x h_alpha)
-  exact dfsu_sandwich m U W (LargeW_Target m W) upper_bound lower_bound
-
-theorem theorem_1_2 
-    (hU_lower : 1 / 2 < U) 
-    (hU_upper : U < 1)
-    (_hW_feasible : U^2 / (1 - U) ≤ W)
-    (h_alpha : Section4.alpha U ≠ 0) : 
-    (U / (1 - U) ≤ W → dim_H_E 2 U W = LargeW_Target 2 W) ∧ 
-    (W ≤ U / (1 - U) → dim_H_E 2 U W = D_low U W) := by
-  constructor
-  · intro _
-    have upper := upper_bound_bridge_large_W 2 U W LinearPiece.global_contraction_bound
-    have lower := lower_bound_bridge_large_W 2 U W (fun x ↦ 
-        Section4.sum_of_lengths 2 U W x h_alpha)
-    exact dfsu_sandwich 2 U W (LargeW_Target 2 W) upper lower
-  · intro _
-    have upper := upper_bound_bridge_remaining_range U W
-      (fun z L C hL h_renew hz0 Z h_tendsto ↦ by
-        have h_unroll_all : ∀ n, z 0 * (1 / L)^n + C * GlobalRenewal.geom_sum (1 / L) n ≤ z n :=
-          fun n ↦ GlobalRenewal.unroll_recurrence z L C h_renew (by linarith) n
-        have h_bound : ∀ n, GlobalRenewalLimit.lower_bound z L C n ≤ z n :=
-          GlobalRenewalLimit.lower_bound_of_unrolled z L C hL h_unroll_all
-        exact GlobalRenewalLimit.le_of_tendsto_limit z L C hL h_bound h_tendsto)
-    have lower := lower_bound_bridge_remaining_range U W (fun A B ↦ 
-        Section6.sum_of_lengths A B)
-    exact dfsu_sandwich 2 U W (D_low U W) upper lower
-
-end Section1
 
 /-!
  Continuous Dynamics and Phase Average Extremization
@@ -4448,8 +4328,8 @@ theorem D_q2_eq_D_low (hA : A = U / (1 + U)) (hB : B = W / (1 + W))
     (h_denom1 : A * (1 + B) - B ≠ 0)
     (hA_ne : A ≠ 0)
     (h_UW_denom : U * (W + 1) * (2 * (1 - U) * W - U) ≠ 0) :
-    D_q2 A B = Section1.D_low U W := by
-  dsimp [D_q2, Section1.D_low, Section6.d0]
+    D_q2 A B = UnifiedTheorems.D_low U W := by
+  dsimp [D_q2, UnifiedTheorems.D_low, Section6.d0]
   have h_L_eq : Section6.L A B = Section7.L_target A B := by
     dsimp [Section6.L, Section7.L_target, Section6.c]
   rw [h_L_eq]
@@ -4678,7 +4558,7 @@ theorem pieces_avg_contraction_ge_D_low
     (h_UW_denom : U * (W + 1) * (2 * (1 - U) * W - U) ≠ 0)
     (h1 : 0 ≤ Section6.len1 A B) (h2 : 0 ≤ Section6.len2 A B)
     (h3 : 0 ≤ Section6.len3 A B) (h4 : 0 ≤ Section6.len4 A B) :
-    Section1.D_low U W ≤
+    UnifiedTheorems.D_low U W ≤
     sum_delta (ConstructiveSection6.pieces A B h1 h2 h3 h4) /
     sum_len (ConstructiveSection6.pieces A B h1 h2 h3 h4) := by
   rw [pieces_avg_contraction_eq A B h1 h2 h3 h4]
@@ -4728,7 +4608,7 @@ theorem remaining_range_lower_bound_wired
       (len4_nonneg A B hA1 hA2 hB hB_star)) = W / (1 + W)) :
     ∃ P : DeductiveBridges.GeneralizedSystem 2,
       DeductiveBridges.has_exponents P U W ∧
-      Section1.D_low U W ≤ DeductiveBridges.avg_contraction P := by
+      UnifiedTheorems.D_low U W ≤ DeductiveBridges.avg_contraction P := by
   have h1 := len1_nonneg A B hA2 hB hB_star
   have h2 := len2_nonneg A B hA1 hA2 hB hB_star
   have h3 := len3_nonneg A B hA1 hA2 hB hB_star
