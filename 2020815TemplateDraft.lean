@@ -3958,3 +3958,459 @@ theorem theorem_1_2_constructive
     exact DeductiveBridges.dfsu_sandwich 2 (D_low U W) U W upper lower
 
 end UnifiedTheorems
+
+/-!
+ Section 16: Trajectory Isomorphism (Discrete ↔ Continuous Bridge)
+
+ Formalization of the evaluation map connecting a discrete GeneralizedSystem 
+ (a looped list of linear pieces) to a continuous coordinate trajectory.
+ We construct the evaluation function P(q) = (P₁(q), P₂(q), P₃(q)) for q ≥ 1
+ and prove that it satisfies:
+   1. Simplex Sum: P₁(q) + P₂(q) + P₃(q) = q identically (eval_sum)
+   2. Simplex Ordering: 0 ≤ P₁(q) ≤ P₂(q) ≤ P₃(q) (eval_order)
+   3. Discrete Block Equivalence: transition values match the 4 moving blocks
+   4. Multiplicative Scaling: P(L) = L • P(1)
+-/
+
+namespace TrajectoryIsomorphism
+
+open Section5 Section6 DeductiveBridges ConstructiveSection6 ConstructiveGlobalPeriodicExtension ExcursionTopology
+
+variable (A B : ℝ)
+
+/-!  16.1 Parameter Positivity and Ordering Helpers -/
+
+theorem c_pos (A : ℝ) (hA2 : A < 1 / 2) : 0 < Section6.c A := by
+  dsimp [Section6.c]; linarith
+
+theorem d0_pos (A : ℝ) (hA1 : 1 / 3 < A) : 0 < Section6.d0 A := by
+  dsimp [Section6.d0]; linarith
+
+theorem B_pos (A B : ℝ) (hA1 : 1 / 3 < A) (hB : Section5.B_min A ≤ B) : 0 < B := by
+  have hA_pos : 0 < A := by linarith
+  have h_quad := Section5.denom_quad_pos A
+  have hB_min_pos : 0 < Section5.B_min A := by
+    dsimp [Section5.B_min]
+    exact div_pos (sq_pos_of_ne_zero (ne_of_gt hA_pos)) h_quad
+  exact lt_of_lt_of_le hB_min_pos hB
+
+theorem L_pos (A B : ℝ) (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    0 < Section6.L A B := by
+  have hc := c_pos A hA2
+  have hB_pos := B_pos A B hA1 hB
+  have hA_lt1 : A < 1 := by linarith
+  have h_denom := (Section5.denominator_pos_iff A B hA_lt1).mpr hB_star
+  dsimp [Section6.L]
+  exact div_pos (mul_pos hc hB_pos) h_denom
+
+theorem x_le_H (A B : ℝ) (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    Section6.x A B ≤ Section6.H A B := by
+  have hL := L_pos A B hA1 hA2 hB hB_star
+  have hd0 : 0 ≤ Section6.d0 A := le_of_lt (d0_pos A hA1)
+  have h_diff : Section6.H A B - Section6.x A B = Section6.L A B * Section6.d0 A := by
+    dsimp [Section6.H, Section6.x, Section6.c, Section6.d0]
+    ring
+  linarith [mul_nonneg (le_of_lt hL) hd0]
+
+theorem c_le_x (A B : ℝ) (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    Section6.c A ≤ Section6.x A B := by
+  have hA_lt1 : A < 1 := by linarith
+  have h_denom := (Section5.denominator_pos_iff A B hA_lt1).mpr hB_star
+  have h_feas : A ≤ Section5.L A B * Section5.c A := (Section5.feasibility_equivalence A B h_denom).mpr hB
+  have hc_lt_A : Section6.c A < A := by
+    dsimp [Section6.c]; linarith
+  have h_x_eq : Section6.x A B = Section5.L A B * Section5.c A := by
+    dsimp [Section6.x, Section6.L, Section5.L, Section6.c, Section5.c]
+  linarith
+
+/-!  16.2 Fundamental Period Critical Times -/
+
+/-- Transition time q₁ at the end of Piece 1 ([2, 3]). -/
+noncomputable def q1 (A B : ℝ) : ℝ := 1 + Section6.len1 A B
+
+/-- Transition time q₂ at the end of Piece 2 ([3, 3]). -/
+noncomputable def q2 (A B : ℝ) : ℝ := 1 + Section6.len1 A B + Section6.len2 A B
+
+/-- Transition time q₃ at the end of Piece 3 ([1, 1]). -/
+noncomputable def q3 (A B : ℝ) : ℝ := 1 + Section6.len1 A B + Section6.len2 A B + Section6.len3 A B
+
+/-- Transition time q₄ at the end of Piece 4 ([2, 2]), completing the period at L. -/
+noncomputable def q4 (A B : ℝ) : ℝ := Section6.L A B
+
+theorem q1_eq (A B : ℝ) : q1 A B = 1 + 2 * (Section6.x A B - A) := rfl
+
+theorem q2_eq (A B : ℝ) : q2 A B = Section6.c A + Section6.x A B + Section6.H A B := by
+  dsimp [q2, q1, Section6.len1, Section6.len2, Section6.c]
+  ring
+
+theorem q3_eq (A B : ℝ) : q3 A B = 2 * Section6.x A B + Section6.H A B := by
+  dsimp [q3, q2, q1, Section6.len1, Section6.len2, Section6.len3, Section6.c]
+  ring
+
+theorem q4_eq_L (A B : ℝ) : q3 A B + Section6.len4 A B = Section6.L A B := by
+  dsimp [q3, q2, q1, Section6.len1, Section6.len2, Section6.len3, Section6.len4, Section6.x, Section6.H, Section6.c]
+  ring
+
+theorem q1_le_q2 (A B : ℝ) (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    q1 A B ≤ q2 A B := by
+  dsimp [q2, q1, Section6.len2]
+  have := x_le_H A B hA1 hA2 hB hB_star
+  linarith
+
+theorem q2_le_q3 (A B : ℝ) (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    q2 A B ≤ q3 A B := by
+  dsimp [q3, q2, Section6.len3]
+  have := c_le_x A B hA1 hA2 hB hB_star
+  linarith
+
+theorem q3_le_L (A B : ℝ) (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    q3 A B ≤ Section6.L A B := by
+  have h4 := q4_eq_L A B
+  have h_len4 : 0 ≤ Section6.len4 A B := by
+    dsimp [Section6.len4]
+    have := x_le_H A B hA1 hA2 hB hB_star
+    linarith
+  linarith
+
+/-!  16.3 Base Period Coordinate Evaluation Functions -/
+
+/-- Base evaluation for coordinate P₁ on the fundamental interval [1, L]. -/
+noncomputable def P1_base (A B q : ℝ) : ℝ :=
+  if q < q2 A B then
+    Section6.c A
+  else if q < q3 A B then
+    Section6.c A + (q - q2 A B)
+  else
+    Section6.x A B
+
+/-- Base evaluation for coordinate P₂ on the fundamental interval [1, L]. -/
+noncomputable def P2_base (A B q : ℝ) : ℝ :=
+  if q < q1 A B then
+    A + (1 / 2) * (q - 1)
+  else if q < q3 A B then
+    Section6.x A B
+  else
+    Section6.x A B + (q - q3 A B)
+
+/-- Base evaluation for coordinate P₃ on the fundamental interval [1, L]. -/
+noncomputable def P3_base (A B q : ℝ) : ℝ :=
+  if q < q1 A B then
+    A + (1 / 2) * (q - 1)
+  else if q < q2 A B then
+    Section6.x A B + (q - q1 A B)
+  else
+    Section6.H A B
+
+/-- Vector evaluation on the fundamental interval [1, L]. -/
+noncomputable def P_base (A B q : ℝ) : ℝ × ℝ × ℝ :=
+  (P1_base A B q, P2_base A B q, P3_base A B q)
+
+/-!  16.4 Base Period Identities and Simplex Constraints -/
+
+/-- The fundamental simplex sum identity holds pointwise across [1, L]. -/
+theorem base_sum (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A)
+    (q : ℝ) (_hq_ge : 1 ≤ q) (_hq_le : q ≤ Section6.L A B) :
+    P1_base A B q + P2_base A B q + P3_base A B q = q := by
+  have _hc_pos : 0 < Section6.c A := c_pos A hA2
+  have hA_lt1 : A < 1 := by linarith
+  have h_denom : 0 < A * (1 + B) - B := (Section5.denominator_pos_iff A B hA_lt1).mpr hB_star
+  have _h_feas : A ≤ Section5.L A B * Section5.c A := (Section5.feasibility_equivalence A B h_denom).mpr hB
+  have h_x_eq : Section6.x A B = Section5.L A B * Section5.c A := by
+    dsimp [Section6.x, Section6.L, Section5.L, Section6.c, Section5.c]
+  have _h_A_le_x : A ≤ Section6.x A B := by linarith
+  have _h_c_le_x : Section6.c A ≤ Section6.x A B := c_le_x A B hA1 hA2 hB hB_star
+  have _h_x_le_H : Section6.x A B ≤ Section6.H A B := x_le_H A B hA1 hA2 hB hB_star
+  have _hq1 : q1 A B = 1 + 2 * (Section6.x A B - A) := rfl
+  have _hq2 : q2 A B = 1 + 2 * (Section6.x A B - A) + (Section6.H A B - Section6.x A B) := rfl
+  have _hq3 : q3 A B = 1 + 2 * (Section6.x A B - A) + (Section6.H A B - Section6.x A B) + (Section6.x A B - Section6.c A) := rfl
+  have _hc : Section6.c A = 1 - 2 * A := rfl
+  dsimp [P1_base, P2_base, P3_base]
+  split_ifs <;> linarith
+
+/-- Pointwise coordinate ordering 0 ≤ P₁ ≤ P₂ ≤ P₃ holds across [1, L]. -/
+theorem base_order (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A)
+    (q : ℝ) (_hq_ge : 1 ≤ q) (hq_le : q ≤ Section6.L A B) :
+    0 ≤ P1_base A B q ∧ P1_base A B q ≤ P2_base A B q ∧ P2_base A B q ≤ P3_base A B q := by
+  have _hc_pos : 0 < Section6.c A := c_pos A hA2
+  have hA_lt1 : A < 1 := by linarith
+  have h_denom : 0 < A * (1 + B) - B := (Section5.denominator_pos_iff A B hA_lt1).mpr hB_star
+  have _h_feas : A ≤ Section5.L A B * Section5.c A := (Section5.feasibility_equivalence A B h_denom).mpr hB
+  have h_x_eq : Section6.x A B = Section5.L A B * Section5.c A := by
+    dsimp [Section6.x, Section6.L, Section5.L, Section6.c, Section5.c]
+  have _h_A_le_x : A ≤ Section6.x A B := by linarith
+  have _h_c_le_x : Section6.c A ≤ Section6.x A B := c_le_x A B hA1 hA2 hB hB_star
+  have _h_x_le_H : Section6.x A B ≤ Section6.H A B := x_le_H A B hA1 hA2 hB hB_star
+  have _hq1 : q1 A B = 1 + 2 * (Section6.x A B - A) := rfl
+  have _hq2 : q2 A B = 1 + 2 * (Section6.x A B - A) + (Section6.H A B - Section6.x A B) := rfl
+  have _hq3 : q3 A B = 1 + 2 * (Section6.x A B - A) + (Section6.H A B - Section6.x A B) + (Section6.x A B - Section6.c A) := rfl
+  have _hq4 : Section6.L A B = q3 A B + (Section6.H A B - Section6.x A B) := by
+    dsimp [q3, q2, q1, Section6.len1, Section6.len2, Section6.len3, Section6.x, Section6.H, Section6.c]; ring
+  have _hc : Section6.c A = 1 - 2 * A := rfl
+  dsimp [P1_base, P2_base, P3_base]
+  split_ifs <;> refine ⟨by linarith, by linarith, by linarith⟩
+
+/-!  16.5 Discrete Moving-Block Equivalence at Transition Points -/
+
+theorem P1_base_at_one (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    P1_base A B 1 = Section6.c A := by
+  have _hc_pos : 0 < Section6.c A := c_pos A hA2
+  have hA_lt1 : A < 1 := by linarith
+  have h_denom : 0 < A * (1 + B) - B := (Section5.denominator_pos_iff A B hA_lt1).mpr hB_star
+  have _h_feas : A ≤ Section5.L A B * Section5.c A := (Section5.feasibility_equivalence A B h_denom).mpr hB
+  have h_x_eq : Section6.x A B = Section5.L A B * Section5.c A := by
+    dsimp [Section6.x, Section6.L, Section5.L, Section6.c, Section5.c]
+  have _h_A_le_x : A ≤ Section6.x A B := by linarith
+  have _h_c_le_x : Section6.c A ≤ Section6.x A B := c_le_x A B hA1 hA2 hB hB_star
+  have _h_x_le_H : Section6.x A B ≤ Section6.H A B := x_le_H A B hA1 hA2 hB hB_star
+  have _hq1 : q1 A B = 1 + 2 * (Section6.x A B - A) := rfl
+  have _hq2 : q2 A B = 1 + 2 * (Section6.x A B - A) + (Section6.H A B - Section6.x A B) := rfl
+  have _hq3 : q3 A B = 1 + 2 * (Section6.x A B - A) + (Section6.H A B - Section6.x A B) + (Section6.x A B - Section6.c A) := rfl
+  have _hc : Section6.c A = 1 - 2 * A := rfl
+  dsimp [P1_base]
+  split_ifs <;> linarith
+
+theorem P2_base_at_one (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    P2_base A B 1 = A := by
+  have _hc_pos : 0 < Section6.c A := c_pos A hA2
+  have hA_lt1 : A < 1 := by linarith
+  have h_denom : 0 < A * (1 + B) - B := (Section5.denominator_pos_iff A B hA_lt1).mpr hB_star
+  have _h_feas : A ≤ Section5.L A B * Section5.c A := (Section5.feasibility_equivalence A B h_denom).mpr hB
+  have h_x_eq : Section6.x A B = Section5.L A B * Section5.c A := by
+    dsimp [Section6.x, Section6.L, Section5.L, Section6.c, Section5.c]
+  have _h_A_le_x : A ≤ Section6.x A B := by linarith
+  have _h_c_le_x : Section6.c A ≤ Section6.x A B := c_le_x A B hA1 hA2 hB hB_star
+  have _h_x_le_H : Section6.x A B ≤ Section6.H A B := x_le_H A B hA1 hA2 hB hB_star
+  have _hq1 : q1 A B = 1 + 2 * (Section6.x A B - A) := rfl
+  have _hq2 : q2 A B = 1 + 2 * (Section6.x A B - A) + (Section6.H A B - Section6.x A B) := rfl
+  have _hq3 : q3 A B = 1 + 2 * (Section6.x A B - A) + (Section6.H A B - Section6.x A B) + (Section6.x A B - Section6.c A) := rfl
+  have _hc : Section6.c A = 1 - 2 * A := rfl
+  dsimp [P2_base]
+  split_ifs <;> linarith
+
+theorem P3_base_at_one (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    P3_base A B 1 = A := by
+  have _hc_pos : 0 < Section6.c A := c_pos A hA2
+  have hA_lt1 : A < 1 := by linarith
+  have h_denom : 0 < A * (1 + B) - B := (Section5.denominator_pos_iff A B hA_lt1).mpr hB_star
+  have _h_feas : A ≤ Section5.L A B * Section5.c A := (Section5.feasibility_equivalence A B h_denom).mpr hB
+  have h_x_eq : Section6.x A B = Section5.L A B * Section5.c A := by
+    dsimp [Section6.x, Section6.L, Section5.L, Section6.c, Section5.c]
+  have _h_A_le_x : A ≤ Section6.x A B := by linarith
+  have _h_c_le_x : Section6.c A ≤ Section6.x A B := c_le_x A B hA1 hA2 hB hB_star
+  have _h_x_le_H : Section6.x A B ≤ Section6.H A B := x_le_H A B hA1 hA2 hB hB_star
+  have _hq1 : q1 A B = 1 + 2 * (Section6.x A B - A) := rfl
+  have _hq2 : q2 A B = 1 + 2 * (Section6.x A B - A) + (Section6.H A B - Section6.x A B) := rfl
+  have _hq3 : q3 A B = 1 + 2 * (Section6.x A B - A) + (Section6.H A B - Section6.x A B) + (Section6.x A B - Section6.c A) := rfl
+  have _hc : Section6.c A = 1 - 2 * A := rfl
+  dsimp [P3_base]
+  split_ifs <;> linarith
+
+theorem P_base_at_one (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    P_base A B 1 = (Section6.c A, A, A) := by
+  dsimp [P_base]
+  rw [P1_base_at_one A B hA1 hA2 hB hB_star,
+      P2_base_at_one A B hA1 hA2 hB hB_star,
+      P3_base_at_one A B hA1 hA2 hB hB_star]
+
+theorem P1_base_at_L (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    P1_base A B (Section6.L A B) = Section6.x A B := by
+  have _hc_pos : 0 < Section6.c A := c_pos A hA2
+  have hA_lt1 : A < 1 := by linarith
+  have h_denom : 0 < A * (1 + B) - B := (Section5.denominator_pos_iff A B hA_lt1).mpr hB_star
+  have _h_feas : A ≤ Section5.L A B * Section5.c A := (Section5.feasibility_equivalence A B h_denom).mpr hB
+  have h_x_eq : Section6.x A B = Section5.L A B * Section5.c A := by
+    dsimp [Section6.x, Section6.L, Section5.L, Section6.c, Section5.c]
+  have _h_A_le_x : A ≤ Section6.x A B := by linarith
+  have _h_c_le_x : Section6.c A ≤ Section6.x A B := c_le_x A B hA1 hA2 hB hB_star
+  have _h_x_le_H : Section6.x A B ≤ Section6.H A B := x_le_H A B hA1 hA2 hB hB_star
+  have _hq1 : q1 A B = 1 + 2 * (Section6.x A B - A) := rfl
+  have _hq2 : q2 A B = 1 + 2 * (Section6.x A B - A) + (Section6.H A B - Section6.x A B) := rfl
+  have _hq3 : q3 A B = 1 + 2 * (Section6.x A B - A) + (Section6.H A B - Section6.x A B) + (Section6.x A B - Section6.c A) := rfl
+  have _hq4 : Section6.L A B = q3 A B + (Section6.H A B - Section6.x A B) := by
+    dsimp [q3, q2, q1, Section6.len1, Section6.len2, Section6.len3, Section6.x, Section6.H, Section6.c]; ring
+  have _hc : Section6.c A = 1 - 2 * A := rfl
+  dsimp [P1_base]
+  split_ifs <;> linarith
+
+theorem P2_base_at_L (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    P2_base A B (Section6.L A B) = Section6.H A B := by
+  have _hc_pos : 0 < Section6.c A := c_pos A hA2
+  have hA_lt1 : A < 1 := by linarith
+  have h_denom : 0 < A * (1 + B) - B := (Section5.denominator_pos_iff A B hA_lt1).mpr hB_star
+  have _h_feas : A ≤ Section5.L A B * Section5.c A := (Section5.feasibility_equivalence A B h_denom).mpr hB
+  have h_x_eq : Section6.x A B = Section5.L A B * Section5.c A := by
+    dsimp [Section6.x, Section6.L, Section5.L, Section6.c, Section5.c]
+  have _h_A_le_x : A ≤ Section6.x A B := by linarith
+  have _h_c_le_x : Section6.c A ≤ Section6.x A B := c_le_x A B hA1 hA2 hB hB_star
+  have _h_x_le_H : Section6.x A B ≤ Section6.H A B := x_le_H A B hA1 hA2 hB hB_star
+  have _hq1 : q1 A B = 1 + 2 * (Section6.x A B - A) := rfl
+  have _hq2 : q2 A B = 1 + 2 * (Section6.x A B - A) + (Section6.H A B - Section6.x A B) := rfl
+  have _hq3 : q3 A B = 1 + 2 * (Section6.x A B - A) + (Section6.H A B - Section6.x A B) + (Section6.x A B - Section6.c A) := rfl
+  have _hq4 : Section6.L A B = q3 A B + (Section6.H A B - Section6.x A B) := by
+    dsimp [q3, q2, q1, Section6.len1, Section6.len2, Section6.len3, Section6.x, Section6.H, Section6.c]; ring
+  have _hc : Section6.c A = 1 - 2 * A := rfl
+  dsimp [P2_base]
+  split_ifs <;> linarith
+
+theorem P3_base_at_L (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    P3_base A B (Section6.L A B) = Section6.H A B := by
+  have _hc_pos : 0 < Section6.c A := c_pos A hA2
+  have hA_lt1 : A < 1 := by linarith
+  have h_denom : 0 < A * (1 + B) - B := (Section5.denominator_pos_iff A B hA_lt1).mpr hB_star
+  have _h_feas : A ≤ Section5.L A B * Section5.c A := (Section5.feasibility_equivalence A B h_denom).mpr hB
+  have h_x_eq : Section6.x A B = Section5.L A B * Section5.c A := by
+    dsimp [Section6.x, Section6.L, Section5.L, Section6.c, Section5.c]
+  have _h_A_le_x : A ≤ Section6.x A B := by linarith
+  have _h_c_le_x : Section6.c A ≤ Section6.x A B := c_le_x A B hA1 hA2 hB hB_star
+  have _h_x_le_H : Section6.x A B ≤ Section6.H A B := x_le_H A B hA1 hA2 hB hB_star
+  have _hq1 : q1 A B = 1 + 2 * (Section6.x A B - A) := rfl
+  have _hq2 : q2 A B = 1 + 2 * (Section6.x A B - A) + (Section6.H A B - Section6.x A B) := rfl
+  have _hq3 : q3 A B = 1 + 2 * (Section6.x A B - A) + (Section6.H A B - Section6.x A B) + (Section6.x A B - Section6.c A) := rfl
+  have _hq4 : Section6.L A B = q3 A B + (Section6.H A B - Section6.x A B) := by
+    dsimp [q3, q2, q1, Section6.len1, Section6.len2, Section6.len3, Section6.x, Section6.H, Section6.c]; ring
+  have _hc : Section6.c A = 1 - 2 * A := rfl
+  dsimp [P3_base]
+  split_ifs <;> linarith
+
+theorem P_base_at_L (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    P_base A B (Section6.L A B) = (Section6.x A B, Section6.H A B, Section6.H A B) := by
+  dsimp [P_base]
+  rw [P1_base_at_L A B hA1 hA2 hB hB_star,
+      P2_base_at_L A B hA1 hA2 hB hB_star,
+      P3_base_at_L A B hA1 hA2 hB hB_star]
+
+/-!  16.6 Global Multiplicatively Periodic Evaluation Map -/
+
+/-- Global continuous evaluation of P₁(q) for any time q ≥ 1. -/
+noncomputable def eval_P1 (A B : ℝ) (hL : 1 < Section6.L A B) (q : ℝ) (hq : 1 ≤ q) : ℝ :=
+  (Section6.L A B) ^ (base_nat (Section6.L A B) hL q hq) *
+    P1_base A B (base_phase (Section6.L A B) hL q hq)
+
+/-- Global continuous evaluation of P₂(q) for any time q ≥ 1. -/
+noncomputable def eval_P2 (A B : ℝ) (hL : 1 < Section6.L A B) (q : ℝ) (hq : 1 ≤ q) : ℝ :=
+  (Section6.L A B) ^ (base_nat (Section6.L A B) hL q hq) *
+    P2_base A B (base_phase (Section6.L A B) hL q hq)
+
+/-- Global continuous evaluation of P₃(q) for any time q ≥ 1. -/
+noncomputable def eval_P3 (A B : ℝ) (hL : 1 < Section6.L A B) (q : ℝ) (hq : 1 ≤ q) : ℝ :=
+  (Section6.L A B) ^ (base_nat (Section6.L A B) hL q hq) *
+    P3_base A B (base_phase (Section6.L A B) hL q hq)
+
+/-- Complete 3D coordinate trajectory evaluation vector. -/
+noncomputable def eval_system (A B : ℝ) (hL : 1 < Section6.L A B) (q : ℝ) (hq : 1 ≤ q) : ℝ × ℝ × ℝ :=
+  (eval_P1 A B hL q hq, eval_P2 A B hL q hq, eval_P3 A B hL q hq)
+
+/-!  16.7 Main Trajectory Verification Theorems -/
+
+/--
+THEOREM 1 (Global Simplex Sum):
+For all q ≥ 1, the evaluated coordinate vector satisfies P₁(q) + P₂(q) + P₃(q) = q identically.
+-/
+theorem eval_sum (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A)
+    (hL : 1 < Section6.L A B) (q : ℝ) (hq : 1 ≤ q) :
+    eval_P1 A B hL q hq + eval_P2 A B hL q hq + eval_P3 A B hL q hq = q := by
+  dsimp [eval_P1, eval_P2, eval_P3]
+  have h_distrib : (Section6.L A B) ^ (base_nat (Section6.L A B) hL q hq) * P1_base A B (base_phase (Section6.L A B) hL q hq) +
+                   (Section6.L A B) ^ (base_nat (Section6.L A B) hL q hq) * P2_base A B (base_phase (Section6.L A B) hL q hq) +
+                   (Section6.L A B) ^ (base_nat (Section6.L A B) hL q hq) * P3_base A B (base_phase (Section6.L A B) hL q hq) =
+                   (Section6.L A B) ^ (base_nat (Section6.L A B) hL q hq) *
+                     (P1_base A B (base_phase (Section6.L A B) hL q hq) +
+                      P2_base A B (base_phase (Section6.L A B) hL q hq) +
+                      P3_base A B (base_phase (Section6.L A B) hL q hq)) := by ring
+  rw [h_distrib]
+  have h_bounds := base_phase_bounds (Section6.L A B) hL q hq
+  have h_sum_base := base_sum A B hA1 hA2 hB hB_star (base_phase (Section6.L A B) hL q hq) h_bounds.1 h_bounds.2
+  rw [h_sum_base]
+  dsimp [base_phase]
+  have hL_pos : 0 < Section6.L A B := by linarith
+  have h_pow_ne : (Section6.L A B) ^ (base_nat (Section6.L A B) hL q hq) ≠ 0 :=
+    ne_of_gt (pow_pos hL_pos _)
+  exact mul_div_cancel₀ q h_pow_ne
+
+/--
+THEOREM 2 (Global Simplex Ordering):
+For all q ≥ 1, the evaluated coordinate vector satisfies 0 ≤ P₁(q) ≤ P₂(q) ≤ P₃(q).
+-/
+theorem eval_order (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A)
+    (hL : 1 < Section6.L A B) (q : ℝ) (hq : 1 ≤ q) :
+    0 ≤ eval_P1 A B hL q hq ∧
+    eval_P1 A B hL q hq ≤ eval_P2 A B hL q hq ∧
+    eval_P2 A B hL q hq ≤ eval_P3 A B hL q hq := by
+  dsimp [eval_P1, eval_P2, eval_P3]
+  have _hL_pos : 0 < Section6.L A B := by linarith
+  have h_scale_pos : 0 ≤ (Section6.L A B) ^ (base_nat (Section6.L A B) hL q hq) := by positivity
+  have h_bounds := base_phase_bounds (Section6.L A B) hL q hq
+  have h_base_ord := base_order A B hA1 hA2 hB hB_star
+    (base_phase (Section6.L A B) hL q hq) h_bounds.1 h_bounds.2
+  refine ⟨mul_nonneg h_scale_pos h_base_ord.1, ?_, ?_⟩
+  · exact mul_le_mul_of_nonneg_left h_base_ord.2.1 h_scale_pos
+  · exact mul_le_mul_of_nonneg_left h_base_ord.2.2 h_scale_pos
+
+/--
+Admissible continuous trajectory package instantiated on the valid physical domain [1, ∞).
+-/
+structure AdmissibleTrajectory2 where
+  eval : ℝ → ℝ × ℝ × ℝ
+  h_sum : ∀ q (_hq : 1 ≤ q), (eval q).1 + (eval q).2.1 + (eval q).2.2 = q
+  h_order : ∀ q (_hq : 1 ≤ q), 0 ≤ (eval q).1 ∧ (eval q).1 ≤ (eval q).2.1 ∧ (eval q).2.1 ≤ (eval q).2.2
+
+/--
+THEOREM 3 (Trajectory Isomorphism Closure):
+Every valid GeneralizedSystem periodic cycle generates a continuous trajectory 
+satisfying the full simplex, ordering, and summation constraints.
+-/
+noncomputable def trajectoryOfSystem (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A)
+    (hL : 1 < Section6.L A B) : AdmissibleTrajectory2 where
+  eval := fun q ↦
+    if hq : 1 ≤ q then
+      eval_system A B hL q hq
+    else
+      (Section6.c A, A, A)
+  h_sum := by
+    intro q hq
+    have : (if h : 1 ≤ q then eval_system A B hL q h else (Section6.c A, A, A)) = eval_system A B hL q hq := by
+      split_ifs with h
+      · congr
+    rw [this]
+    exact eval_sum A B hA1 hA2 hB hB_star hL q hq
+  h_order := by
+    intro q hq
+    have : (if h : 1 ≤ q then eval_system A B hL q h else (Section6.c A, A, A)) = eval_system A B hL q hq := by
+      split_ifs with h
+      · congr
+    rw [this]
+    exact eval_order A B hA1 hA2 hB hB_star hL q hq
+
+end TrajectoryIsomorphism
