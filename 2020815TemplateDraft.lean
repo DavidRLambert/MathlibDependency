@@ -4620,3 +4620,542 @@ theorem remaining_range_lower_bound_wired
   refine ⟨P, h_exp, h_rate⟩
 
 end PhaseMinimumToDFSU
+
+/-!
+ Section 18: Continuity and Monotonicity of the Periodic Trajectory
+
+ Formalizes the analytic continuity and coordinate monotonicity of the 3-coordinate 
+ template evaluation map. We prove:
+   1. Piecewise min/max algebraic reductions for P1_base, P2_base, and P3_base on ℝ.
+   2. Unconditional continuity and monotonicity of the base coordinate functions on [1, L].
+   3. Multiplicative boundary scale matching at the period endpoints (q = 1 and q = L).
+   4. Global coordinate monotonicity for eval_P1, eval_P2, and eval_P3 across all periods.
+   5. Integration into the continuous trajectory package ContinuousAdmissibleTrajectory2,
+      bridging TrajectoryIsomorphism with the excursion topology of Section 13.
+-/
+
+namespace TrajectoryContinuity
+
+open Section5 Section6 DeductiveBridges ConstructiveSection6
+open ConstructiveGlobalPeriodicExtension ExcursionTopology TrajectoryIsomorphism
+
+/-!  18.1 Piecewise Min-Max Representations of Base Coordinates -/
+
+/-- Exact min-max representation of P1_base on ℝ. -/
+theorem P1_base_eq_min_max (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) (q : ℝ) :
+    P1_base A B q = min (Section6.x A B) (max (Section6.c A) (Section6.c A + (q - TrajectoryIsomorphism.q2 A B))) := by
+  have hc_le_x := c_le_x A B hA1 hA2 hB hB_star
+  have _hq2_le_q3 := q2_le_q3 A B hA1 hA2 hB hB_star
+  have hq3_eq : TrajectoryIsomorphism.q3 A B = TrajectoryIsomorphism.q2 A B + (Section6.x A B - Section6.c A) := rfl
+  dsimp [P1_base]
+  split_ifs with h1 h2
+  · have : Section6.c A + (q - TrajectoryIsomorphism.q2 A B) ≤ Section6.c A := by linarith
+    rw [max_eq_left this, min_eq_right hc_le_x]
+  · push Not at h1
+    have h_max : max (Section6.c A) (Section6.c A + (q - TrajectoryIsomorphism.q2 A B)) =
+        Section6.c A + (q - TrajectoryIsomorphism.q2 A B) :=
+      max_eq_right (by linarith)
+    rw [h_max]
+    have h_min : Section6.c A + (q - TrajectoryIsomorphism.q2 A B) ≤ Section6.x A B := by
+      linarith [hq3_eq, h2]
+    exact (min_eq_right h_min).symm
+  · push Not at h1 h2
+    have h_ge : Section6.x A B ≤ Section6.c A + (q - TrajectoryIsomorphism.q2 A B) := by
+      linarith [hq3_eq, h2]
+    have h_max : max (Section6.c A) (Section6.c A + (q - TrajectoryIsomorphism.q2 A B)) =
+        Section6.c A + (q - TrajectoryIsomorphism.q2 A B) :=
+      max_eq_right (by linarith [hc_le_x, h_ge])
+    rw [h_max, min_eq_left h_ge]
+
+/-- Exact min-max representation of P2_base on ℝ. -/
+theorem P2_base_eq_min_max (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) (q : ℝ) :
+    P2_base A B q = max (min (Section6.x A B) (A + (1 / 2) * (q - 1))) (Section6.x A B + (q - TrajectoryIsomorphism.q3 A B)) := by
+  have hc_le_x := c_le_x A B hA1 hA2 hB hB_star
+  have hx_le_H := x_le_H A B hA1 hA2 hB hB_star
+  have _hq1_le_q2 := q1_le_q2 A B hA1 hA2 hB hB_star
+  have _hq2_le_q3 := q2_le_q3 A B hA1 hA2 hB hB_star
+  have hq1_eq : TrajectoryIsomorphism.q1 A B = 1 + 2 * (Section6.x A B - A) := rfl
+  have hq2_eq := TrajectoryIsomorphism.q2_eq A B
+  have hq3_eq := TrajectoryIsomorphism.q3_eq A B
+  have hc_def : Section6.c A = 1 - 2 * A := rfl
+  dsimp [P2_base]
+  split_ifs with h1 h2
+  · have h_min : min (Section6.x A B) (A + (1 / 2) * (q - 1)) = A + (1 / 2) * (q - 1) := by
+      apply min_eq_right
+      linarith [hq1_eq, h1]
+    rw [h_min]
+    have h_max : Section6.x A B + (q - TrajectoryIsomorphism.q3 A B) ≤ A + (1 / 2) * (q - 1) := by
+      dsimp [Section6.H] at hx_le_H
+      linarith [hq1_eq, hq2_eq, hq3_eq, hc_def, hc_le_x, hx_le_H, h1]
+    exact (max_eq_left h_max).symm
+  · push Not at h1
+    have h_min : min (Section6.x A B) (A + (1 / 2) * (q - 1)) = Section6.x A B := by
+      apply min_eq_left
+      linarith [hq1_eq, h1]
+    rw [h_min]
+    have h_max : Section6.x A B + (q - TrajectoryIsomorphism.q3 A B) ≤ Section6.x A B := by linarith [h2]
+    exact (max_eq_left h_max).symm
+  · push Not at h1 h2
+    have h_min : min (Section6.x A B) (A + (1 / 2) * (q - 1)) = Section6.x A B := by
+      apply min_eq_left
+      have : TrajectoryIsomorphism.q1 A B ≤ q := le_trans (q1_le_q2 A B hA1 hA2 hB hB_star)
+        (le_trans (q2_le_q3 A B hA1 hA2 hB hB_star) h2)
+      linarith [hq1_eq, this]
+    rw [h_min]
+    have h_max : Section6.x A B ≤ Section6.x A B + (q - TrajectoryIsomorphism.q3 A B) := by linarith [h2]
+    exact (max_eq_right h_max).symm
+
+/-- Exact min-max representation of P3_base on ℝ. -/
+theorem P3_base_eq_min_max (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) (q : ℝ) :
+    P3_base A B q = min (Section6.H A B) (max (A + (1 / 2) * (q - 1)) (Section6.x A B + (q - TrajectoryIsomorphism.q1 A B))) := by
+  have _hc_le_x := c_le_x A B hA1 hA2 hB hB_star
+  have hx_le_H := x_le_H A B hA1 hA2 hB hB_star
+  have _hq1_le_q2 := q1_le_q2 A B hA1 hA2 hB hB_star
+  have hq1_eq : TrajectoryIsomorphism.q1 A B = 1 + 2 * (Section6.x A B - A) := rfl
+  have hq2_eq : TrajectoryIsomorphism.q2 A B = TrajectoryIsomorphism.q1 A B + (Section6.H A B - Section6.x A B) := by
+    dsimp [TrajectoryIsomorphism.q2, TrajectoryIsomorphism.q1, Section6.len2]
+  dsimp [P3_base]
+  split_ifs with h1 h2
+  · have h_max : max (A + (1 / 2) * (q - 1)) (Section6.x A B + (q - TrajectoryIsomorphism.q1 A B)) = A + (1 / 2) * (q - 1) := by
+      apply max_eq_left
+      linarith [hq1_eq, h1]
+    rw [h_max]
+    have h_min : A + (1 / 2) * (q - 1) ≤ Section6.H A B := by
+      linarith [hq1_eq, hx_le_H, h1]
+    exact (min_eq_right h_min).symm
+  · push Not at h1
+    have h_max : max (A + (1 / 2) * (q - 1)) (Section6.x A B + (q - TrajectoryIsomorphism.q1 A B)) = Section6.x A B + (q - TrajectoryIsomorphism.q1 A B) := by
+      apply max_eq_right
+      linarith [hq1_eq, h1]
+    rw [h_max]
+    have h_min : Section6.x A B + (q - TrajectoryIsomorphism.q1 A B) ≤ Section6.H A B := by
+      linarith [hq2_eq, h2]
+    exact (min_eq_right h_min).symm
+  · push Not at h1 h2
+    have h_max : max (A + (1 / 2) * (q - 1)) (Section6.x A B + (q - TrajectoryIsomorphism.q1 A B)) = Section6.x A B + (q - TrajectoryIsomorphism.q1 A B) := by
+      apply max_eq_right
+      have : TrajectoryIsomorphism.q1 A B ≤ q := le_trans (q1_le_q2 A B hA1 hA2 hB hB_star) h2
+      linarith [hq1_eq, this]
+    rw [h_max]
+    have h_min : Section6.H A B ≤ Section6.x A B + (q - TrajectoryIsomorphism.q1 A B) := by
+      linarith [hq2_eq, h2]
+    exact (min_eq_left h_min).symm
+
+/-!  18.2 Base Period Continuity -/
+
+theorem continuous_P1_base (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    Continuous (P1_base A B) := by
+  have h_eq : P1_base A B = fun q ↦ min (Section6.x A B) (max (Section6.c A) (Section6.c A + (q - TrajectoryIsomorphism.q2 A B))) := by
+    ext q
+    exact P1_base_eq_min_max A B hA1 hA2 hB hB_star q
+  rw [h_eq]
+  exact continuous_const.min (continuous_const.max (continuous_const.add (continuous_id.sub continuous_const)))
+
+theorem continuous_P2_base (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    Continuous (P2_base A B) := by
+  have h_eq : P2_base A B = fun q ↦ max (min (Section6.x A B) (A + (1 / 2) * (q - 1))) (Section6.x A B + (q - TrajectoryIsomorphism.q3 A B)) := by
+    ext q
+    exact P2_base_eq_min_max A B hA1 hA2 hB hB_star q
+  rw [h_eq]
+  refine (continuous_const.min (continuous_const.add (continuous_const.mul (continuous_id.sub continuous_const)))).max
+         (continuous_const.add (continuous_id.sub continuous_const))
+
+theorem continuous_P3_base (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    Continuous (P3_base A B) := by
+  have h_eq : P3_base A B = fun q ↦ min (Section6.H A B) (max (A + (1 / 2) * (q - 1)) (Section6.x A B + (q - TrajectoryIsomorphism.q1 A B))) := by
+    ext q
+    exact P3_base_eq_min_max A B hA1 hA2 hB hB_star q
+  rw [h_eq]
+  refine continuous_const.min ((continuous_const.add (continuous_const.mul (continuous_id.sub continuous_const))).max
+         (continuous_const.add (continuous_id.sub continuous_const)))
+
+theorem continuousOn_P1_base (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    ContinuousOn (P1_base A B) (Set.Icc 1 (Section6.L A B)) :=
+  (continuous_P1_base A B hA1 hA2 hB hB_star).continuousOn
+
+theorem continuousOn_P2_base (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    ContinuousOn (P2_base A B) (Set.Icc 1 (Section6.L A B)) :=
+  (continuous_P2_base A B hA1 hA2 hB hB_star).continuousOn
+
+theorem continuousOn_P3_base (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    ContinuousOn (P3_base A B) (Set.Icc 1 (Section6.L A B)) :=
+  (continuous_P3_base A B hA1 hA2 hB hB_star).continuousOn
+
+/-!  18.3 Base Period Monotonicity -/
+
+theorem monotone_P1_base (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    Monotone (P1_base A B) := by
+  intro q1_val q2_val h_le
+  rw [P1_base_eq_min_max A B hA1 hA2 hB hB_star q1_val,
+      P1_base_eq_min_max A B hA1 hA2 hB hB_star q2_val]
+  have h_add : Section6.c A + (q1_val - TrajectoryIsomorphism.q2 A B) ≤ Section6.c A + (q2_val - TrajectoryIsomorphism.q2 A B) := by linarith
+  have h_max : max (Section6.c A) (Section6.c A + (q1_val - TrajectoryIsomorphism.q2 A B)) ≤
+               max (Section6.c A) (Section6.c A + (q2_val - TrajectoryIsomorphism.q2 A B)) :=
+    max_le_max le_rfl h_add
+  exact min_le_min le_rfl h_max
+
+theorem monotone_P2_base (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    Monotone (P2_base A B) := by
+  intro q1_val q2_val h_le
+  rw [P2_base_eq_min_max A B hA1 hA2 hB hB_star q1_val,
+      P2_base_eq_min_max A B hA1 hA2 hB hB_star q2_val]
+  have h_sub1 : A + (1 / 2) * (q1_val - 1) ≤ A + (1 / 2) * (q2_val - 1) := by linarith
+  have h_min : min (Section6.x A B) (A + (1 / 2) * (q1_val - 1)) ≤
+               min (Section6.x A B) (A + (1 / 2) * (q2_val - 1)) :=
+    min_le_min le_rfl h_sub1
+  have h_sub2 : Section6.x A B + (q1_val - TrajectoryIsomorphism.q3 A B) ≤ Section6.x A B + (q2_val - TrajectoryIsomorphism.q3 A B) := by linarith
+  exact max_le_max h_min h_sub2
+
+theorem monotone_P3_base (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    Monotone (P3_base A B) := by
+  intro q1_val q2_val h_le
+  rw [P3_base_eq_min_max A B hA1 hA2 hB hB_star q1_val,
+      P3_base_eq_min_max A B hA1 hA2 hB hB_star q2_val]
+  have h_sub1 : A + (1 / 2) * (q1_val - 1) ≤ A + (1 / 2) * (q2_val - 1) := by linarith
+  have h_sub2 : Section6.x A B + (q1_val - TrajectoryIsomorphism.q1 A B) ≤ Section6.x A B + (q2_val - TrajectoryIsomorphism.q1 A B) := by linarith
+  have h_max : max (A + (1 / 2) * (q1_val - 1)) (Section6.x A B + (q1_val - TrajectoryIsomorphism.q1 A B)) ≤
+               max (A + (1 / 2) * (q2_val - 1)) (Section6.x A B + (q2_val - TrajectoryIsomorphism.q1 A B)) :=
+    max_le_max h_sub1 h_sub2
+  exact min_le_min le_rfl h_max
+
+theorem monotoneOn_P1_base (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    MonotoneOn (P1_base A B) (Set.Icc 1 (Section6.L A B)) :=
+  (monotone_P1_base A B hA1 hA2 hB hB_star).monotoneOn (Set.Icc 1 (Section6.L A B))
+
+theorem monotoneOn_P2_base (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    MonotoneOn (P2_base A B) (Set.Icc 1 (Section6.L A B)) :=
+  (monotone_P2_base A B hA1 hA2 hB hB_star).monotoneOn (Set.Icc 1 (Section6.L A B))
+
+theorem monotoneOn_P3_base (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    MonotoneOn (P3_base A B) (Set.Icc 1 (Section6.L A B)) :=
+  (monotone_P3_base A B hA1 hA2 hB hB_star).monotoneOn (Set.Icc 1 (Section6.L A B))
+
+/-!  18.4 Multiplicative Boundary Scaling Identities -/
+
+theorem P1_base_scale_endpoints (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    P1_base A B (Section6.L A B) = Section6.L A B * P1_base A B 1 := by
+  rw [P1_base_at_L A B hA1 hA2 hB hB_star, P1_base_at_one A B hA1 hA2 hB hB_star]
+  rfl
+
+theorem P2_base_scale_endpoints (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    P2_base A B (Section6.L A B) = Section6.L A B * P2_base A B 1 := by
+  rw [P2_base_at_L A B hA1 hA2 hB hB_star, P2_base_at_one A B hA1 hA2 hB hB_star]
+  rfl
+
+theorem P3_base_scale_endpoints (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A) :
+    P3_base A B (Section6.L A B) = Section6.L A B * P3_base A B 1 := by
+  rw [P3_base_at_L A B hA1 hA2 hB hB_star, P3_base_at_one A B hA1 hA2 hB hB_star]
+  rfl
+
+/-!  18.5 Global Trajectory Monotonicity Across Scale Boundaries -/
+
+theorem eval_P1_mono_same_period (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A)
+    (hL : 1 < Section6.L A B)
+    {q1 q2 : ℝ} (hq1 : 1 ≤ q1) (hq2 : 1 ≤ q2) (h_le : q1 ≤ q2)
+    (h_same : base_nat (Section6.L A B) hL q1 hq1 = base_nat (Section6.L A B) hL q2 hq2) :
+    eval_P1 A B hL q1 hq1 ≤ eval_P1 A B hL q2 hq2 := by
+  dsimp [eval_P1, base_phase]
+  rw [h_same]
+  have hL_pos : 0 < Section6.L A B := by linarith
+  have h_pow_pos : 0 < (Section6.L A B) ^ (base_nat (Section6.L A B) hL q2 hq2) := pow_pos hL_pos _
+  have h_phase_le : q1 / (Section6.L A B) ^ (base_nat (Section6.L A B) hL q2 hq2) ≤
+                    q2 / (Section6.L A B) ^ (base_nat (Section6.L A B) hL q2 hq2) :=
+    div_le_div_of_nonneg_right h_le (le_of_lt h_pow_pos)
+  have h_base_mono := monotone_P1_base A B hA1 hA2 hB hB_star h_phase_le
+  exact mul_le_mul_of_nonneg_left h_base_mono (le_of_lt h_pow_pos)
+
+theorem eval_P1_mono_diff_period (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A)
+    (hL : 1 < Section6.L A B)
+    {q1 q2 : ℝ} (hq1 : 1 ≤ q1) (hq2 : 1 ≤ q2)
+    (h_lt : base_nat (Section6.L A B) hL q1 hq1 < base_nat (Section6.L A B) hL q2 hq2) :
+    eval_P1 A B hL q1 hq1 ≤ eval_P1 A B hL q2 hq2 := by
+  dsimp [eval_P1]
+  set n1 := base_nat (Section6.L A B) hL q1 hq1
+  set n2 := base_nat (Section6.L A B) hL q2 hq2
+  have h_b1 := base_phase_bounds (Section6.L A B) hL q1 hq1
+  have h_b2 := base_phase_bounds (Section6.L A B) hL q2 hq2
+  have h_mono := monotone_P1_base A B hA1 hA2 hB hB_star
+  have h_base1_le : P1_base A B (base_phase (Section6.L A B) hL q1 hq1) ≤ Section6.x A B := by
+    rw [← P1_base_at_L A B hA1 hA2 hB hB_star]
+    exact h_mono h_b1.2
+  have h_base2_ge : Section6.c A ≤ P1_base A B (base_phase (Section6.L A B) hL q2 hq2) := by
+    have h_at_one := P1_base_at_one A B hA1 hA2 hB hB_star
+    have h_le := h_mono h_b2.1
+    rwa [h_at_one] at h_le
+  have h_pow1_pos : 0 ≤ (Section6.L A B) ^ n1 := by positivity
+  have h_pow2_pos : 0 ≤ (Section6.L A B) ^ n2 := by positivity
+  have h_c_nonneg : 0 ≤ Section6.c A := le_of_lt (c_pos A hA2)
+  have h_x_eq : Section6.x A B = Section6.L A B * Section6.c A := rfl
+  have h_step1 : (Section6.L A B) ^ n1 * P1_base A B (base_phase (Section6.L A B) hL q1 hq1) ≤
+                 (Section6.L A B) ^ (n1 + 1) * Section6.c A := by
+    calc (Section6.L A B) ^ n1 * P1_base A B (base_phase (Section6.L A B) hL q1 hq1)
+      _ ≤ (Section6.L A B) ^ n1 * Section6.x A B := mul_le_mul_of_nonneg_left h_base1_le h_pow1_pos
+      _ = (Section6.L A B) ^ n1 * (Section6.L A B * Section6.c A) := by rw [h_x_eq]
+      _ = (Section6.L A B) ^ (n1 + 1) * Section6.c A := by ring
+  have h_pow_le : (Section6.L A B) ^ (n1 + 1) ≤ (Section6.L A B) ^ n2 :=
+    pow_le_pow_right₀ (le_of_lt hL) h_lt
+  have h_step2 : (Section6.L A B) ^ (n1 + 1) * Section6.c A ≤ (Section6.L A B) ^ n2 * Section6.c A :=
+    mul_le_mul_of_nonneg_right h_pow_le h_c_nonneg
+  have h_step3 : (Section6.L A B) ^ n2 * Section6.c A ≤
+                 (Section6.L A B) ^ n2 * P1_base A B (base_phase (Section6.L A B) hL q2 hq2) :=
+    mul_le_mul_of_nonneg_left h_base2_ge h_pow2_pos
+  linarith
+
+/-- Master Monotonicity Theorem for Coordinate P₁. -/
+theorem eval_P1_monotone (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A)
+    (hL : 1 < Section6.L A B)
+    {q1 q2 : ℝ} (hq1 : 1 ≤ q1) (hq2 : 1 ≤ q2) (h_le : q1 ≤ q2) :
+    eval_P1 A B hL q1 hq1 ≤ eval_P1 A B hL q2 hq2 := by
+  set n1 := base_nat (Section6.L A B) hL q1 hq1
+  set n2 := base_nat (Section6.L A B) hL q2 hq2
+  rcases lt_or_eq_of_le (show n1 ≤ n2 by
+    have _h1 := (base_nat_spec (Section6.L A B) hL q1 hq1).1
+    have _h2 := (base_nat_spec (Section6.L A B) hL q2 hq2).2
+    by_contra h_contra
+    push Not at h_contra
+    have h_pow : (Section6.L A B) ^ (n2 + 1) ≤ (Section6.L A B) ^ n1 :=
+      pow_le_pow_right₀ (le_of_lt hL) h_contra
+    linarith) with h_lt | h_eq
+  · exact eval_P1_mono_diff_period A B hA1 hA2 hB hB_star hL hq1 hq2 h_lt
+  · exact eval_P1_mono_same_period A B hA1 hA2 hB hB_star hL hq1 hq2 h_le h_eq
+
+theorem eval_P2_mono_same_period (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A)
+    (hL : 1 < Section6.L A B)
+    {q1 q2 : ℝ} (hq1 : 1 ≤ q1) (hq2 : 1 ≤ q2) (h_le : q1 ≤ q2)
+    (h_same : base_nat (Section6.L A B) hL q1 hq1 = base_nat (Section6.L A B) hL q2 hq2) :
+    eval_P2 A B hL q1 hq1 ≤ eval_P2 A B hL q2 hq2 := by
+  dsimp [eval_P2, base_phase]
+  rw [h_same]
+  have hL_pos : 0 < Section6.L A B := by linarith
+  have h_pow_pos : 0 < (Section6.L A B) ^ (base_nat (Section6.L A B) hL q2 hq2) := pow_pos hL_pos _
+  have h_phase_le : q1 / (Section6.L A B) ^ (base_nat (Section6.L A B) hL q2 hq2) ≤
+                    q2 / (Section6.L A B) ^ (base_nat (Section6.L A B) hL q2 hq2) :=
+    div_le_div_of_nonneg_right h_le (le_of_lt h_pow_pos)
+  have h_base_mono := monotone_P2_base A B hA1 hA2 hB hB_star h_phase_le
+  exact mul_le_mul_of_nonneg_left h_base_mono (le_of_lt h_pow_pos)
+
+theorem eval_P2_mono_diff_period (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A)
+    (hL : 1 < Section6.L A B)
+    {q1 q2 : ℝ} (hq1 : 1 ≤ q1) (hq2 : 1 ≤ q2)
+    (h_lt : base_nat (Section6.L A B) hL q1 hq1 < base_nat (Section6.L A B) hL q2 hq2) :
+    eval_P2 A B hL q1 hq1 ≤ eval_P2 A B hL q2 hq2 := by
+  dsimp [eval_P2]
+  set n1 := base_nat (Section6.L A B) hL q1 hq1
+  set n2 := base_nat (Section6.L A B) hL q2 hq2
+  have h_b1 := base_phase_bounds (Section6.L A B) hL q1 hq1
+  have h_b2 := base_phase_bounds (Section6.L A B) hL q2 hq2
+  have h_mono := monotone_P2_base A B hA1 hA2 hB hB_star
+  have h_base1_le : P2_base A B (base_phase (Section6.L A B) hL q1 hq1) ≤ Section6.H A B := by
+    rw [← P2_base_at_L A B hA1 hA2 hB hB_star]
+    exact h_mono h_b1.2
+  have h_base2_ge : A ≤ P2_base A B (base_phase (Section6.L A B) hL q2 hq2) := by
+    have h_at_one := P2_base_at_one A B hA1 hA2 hB hB_star
+    have h_le := h_mono h_b2.1
+    rwa [h_at_one] at h_le
+  have h_pow1_pos : 0 ≤ (Section6.L A B) ^ n1 := by positivity
+  have h_pow2_pos : 0 ≤ (Section6.L A B) ^ n2 := by positivity
+  have hA_nonneg : 0 ≤ A := by linarith
+  have h_H_eq : Section6.H A B = Section6.L A B * A := rfl
+  have h_step1 : (Section6.L A B) ^ n1 * P2_base A B (base_phase (Section6.L A B) hL q1 hq1) ≤
+                 (Section6.L A B) ^ (n1 + 1) * A := by
+    calc (Section6.L A B) ^ n1 * P2_base A B (base_phase (Section6.L A B) hL q1 hq1)
+      _ ≤ (Section6.L A B) ^ n1 * Section6.H A B := mul_le_mul_of_nonneg_left h_base1_le h_pow1_pos
+      _ = (Section6.L A B) ^ n1 * (Section6.L A B * A) := by rw [h_H_eq]
+      _ = (Section6.L A B) ^ (n1 + 1) * A := by ring
+  have h_pow_le : (Section6.L A B) ^ (n1 + 1) ≤ (Section6.L A B) ^ n2 :=
+    pow_le_pow_right₀ (le_of_lt hL) h_lt
+  have h_step2 : (Section6.L A B) ^ (n1 + 1) * A ≤ (Section6.L A B) ^ n2 * A :=
+    mul_le_mul_of_nonneg_right h_pow_le hA_nonneg
+  have h_step3 : (Section6.L A B) ^ n2 * A ≤
+                 (Section6.L A B) ^ n2 * P2_base A B (base_phase (Section6.L A B) hL q2 hq2) :=
+    mul_le_mul_of_nonneg_left h_base2_ge h_pow2_pos
+  linarith
+
+/-- Master Monotonicity Theorem for Coordinate P₂. -/
+theorem eval_P2_monotone (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A)
+    (hL : 1 < Section6.L A B)
+    {q1 q2 : ℝ} (hq1 : 1 ≤ q1) (hq2 : 1 ≤ q2) (h_le : q1 ≤ q2) :
+    eval_P2 A B hL q1 hq1 ≤ eval_P2 A B hL q2 hq2 := by
+  set n1 := base_nat (Section6.L A B) hL q1 hq1
+  set n2 := base_nat (Section6.L A B) hL q2 hq2
+  rcases lt_or_eq_of_le (show n1 ≤ n2 by
+    have _h1 := (base_nat_spec (Section6.L A B) hL q1 hq1).1
+    have _h2 := (base_nat_spec (Section6.L A B) hL q2 hq2).2
+    by_contra h_contra
+    push Not at h_contra
+    have h_pow : (Section6.L A B) ^ (n2 + 1) ≤ (Section6.L A B) ^ n1 :=
+      pow_le_pow_right₀ (le_of_lt hL) h_contra
+    linarith) with h_lt | h_eq
+  · exact eval_P2_mono_diff_period A B hA1 hA2 hB hB_star hL hq1 hq2 h_lt
+  · exact eval_P2_mono_same_period A B hA1 hA2 hB hB_star hL hq1 hq2 h_le h_eq
+
+theorem eval_P3_mono_same_period (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A)
+    (hL : 1 < Section6.L A B)
+    {q1 q2 : ℝ} (hq1 : 1 ≤ q1) (hq2 : 1 ≤ q2) (h_le : q1 ≤ q2)
+    (h_same : base_nat (Section6.L A B) hL q1 hq1 = base_nat (Section6.L A B) hL q2 hq2) :
+    eval_P3 A B hL q1 hq1 ≤ eval_P3 A B hL q2 hq2 := by
+  dsimp [eval_P3, base_phase]
+  rw [h_same]
+  have hL_pos : 0 < Section6.L A B := by linarith
+  have h_pow_pos : 0 < (Section6.L A B) ^ (base_nat (Section6.L A B) hL q2 hq2) := pow_pos hL_pos _
+  have h_phase_le : q1 / (Section6.L A B) ^ (base_nat (Section6.L A B) hL q2 hq2) ≤
+                    q2 / (Section6.L A B) ^ (base_nat (Section6.L A B) hL q2 hq2) :=
+    div_le_div_of_nonneg_right h_le (le_of_lt h_pow_pos)
+  have h_base_mono := monotone_P3_base A B hA1 hA2 hB hB_star h_phase_le
+  exact mul_le_mul_of_nonneg_left h_base_mono (le_of_lt h_pow_pos)
+
+theorem eval_P3_mono_diff_period (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A)
+    (hL : 1 < Section6.L A B)
+    {q1 q2 : ℝ} (hq1 : 1 ≤ q1) (hq2 : 1 ≤ q2)
+    (h_lt : base_nat (Section6.L A B) hL q1 hq1 < base_nat (Section6.L A B) hL q2 hq2) :
+    eval_P3 A B hL q1 hq1 ≤ eval_P3 A B hL q2 hq2 := by
+  dsimp [eval_P3]
+  set n1 := base_nat (Section6.L A B) hL q1 hq1
+  set n2 := base_nat (Section6.L A B) hL q2 hq2
+  have h_b1 := base_phase_bounds (Section6.L A B) hL q1 hq1
+  have h_b2 := base_phase_bounds (Section6.L A B) hL q2 hq2
+  have h_mono := monotone_P3_base A B hA1 hA2 hB hB_star
+  have h_base1_le : P3_base A B (base_phase (Section6.L A B) hL q1 hq1) ≤ Section6.H A B := by
+    rw [← P3_base_at_L A B hA1 hA2 hB hB_star]
+    exact h_mono h_b1.2
+  have h_base2_ge : A ≤ P3_base A B (base_phase (Section6.L A B) hL q2 hq2) := by
+    have h_at_one := P3_base_at_one A B hA1 hA2 hB hB_star
+    have h_le := h_mono h_b2.1
+    rwa [h_at_one] at h_le
+  have h_pow1_pos : 0 ≤ (Section6.L A B) ^ n1 := by positivity
+  have h_pow2_pos : 0 ≤ (Section6.L A B) ^ n2 := by positivity
+  have hA_nonneg : 0 ≤ A := by linarith
+  have h_H_eq : Section6.H A B = Section6.L A B * A := rfl
+  have h_step1 : (Section6.L A B) ^ n1 * P3_base A B (base_phase (Section6.L A B) hL q1 hq1) ≤
+                 (Section6.L A B) ^ (n1 + 1) * A := by
+    calc (Section6.L A B) ^ n1 * P3_base A B (base_phase (Section6.L A B) hL q1 hq1)
+      _ ≤ (Section6.L A B) ^ n1 * Section6.H A B := mul_le_mul_of_nonneg_left h_base1_le h_pow1_pos
+      _ = (Section6.L A B) ^ n1 * (Section6.L A B * A) := by rw [h_H_eq]
+      _ = (Section6.L A B) ^ (n1 + 1) * A := by ring
+  have h_pow_le : (Section6.L A B) ^ (n1 + 1) ≤ (Section6.L A B) ^ n2 :=
+    pow_le_pow_right₀ (le_of_lt hL) h_lt
+  have h_step2 : (Section6.L A B) ^ (n1 + 1) * A ≤ (Section6.L A B) ^ n2 * A :=
+    mul_le_mul_of_nonneg_right h_pow_le hA_nonneg
+  have h_step3 : (Section6.L A B) ^ n2 * A ≤
+                 (Section6.L A B) ^ n2 * P3_base A B (base_phase (Section6.L A B) hL q2 hq2) :=
+    mul_le_mul_of_nonneg_left h_base2_ge h_pow2_pos
+  linarith
+
+/-- Master Monotonicity Theorem for Coordinate P₃. -/
+theorem eval_P3_monotone (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A)
+    (hL : 1 < Section6.L A B)
+    {q1 q2 : ℝ} (hq1 : 1 ≤ q1) (hq2 : 1 ≤ q2) (h_le : q1 ≤ q2) :
+    eval_P3 A B hL q1 hq1 ≤ eval_P3 A B hL q2 hq2 := by
+  set n1 := base_nat (Section6.L A B) hL q1 hq1
+  set n2 := base_nat (Section6.L A B) hL q2 hq2
+  rcases lt_or_eq_of_le (show n1 ≤ n2 by
+    have _h1 := (base_nat_spec (Section6.L A B) hL q1 hq1).1
+    have _h2 := (base_nat_spec (Section6.L A B) hL q2 hq2).2
+    by_contra h_contra
+    push Not at h_contra
+    have h_pow : (Section6.L A B) ^ (n2 + 1) ≤ (Section6.L A B) ^ n1 :=
+      pow_le_pow_right₀ (le_of_lt hL) h_contra
+    linarith) with h_lt | h_eq
+  · exact eval_P3_mono_diff_period A B hA1 hA2 hB hB_star hL hq1 hq2 h_lt
+  · exact eval_P3_mono_same_period A B hA1 hA2 hB hB_star hL hq1 hq2 h_le h_eq
+
+/-!  18.6 The Continuous Admissible Trajectory Bridge -/
+
+/-- A trajectory package equipped with explicit continuity and monotonicity certificates on [1, ∞). -/
+structure ContinuousAdmissibleTrajectory2 where
+  eval : ℝ → ℝ × ℝ × ℝ
+  h_sum : ∀ q (_hq : 1 ≤ q), (eval q).1 + (eval q).2.1 + (eval q).2.2 = q
+  h_order : ∀ q (_hq : 1 ≤ q), 0 ≤ (eval q).1 ∧ (eval q).1 ≤ (eval q).2.1 ∧ (eval q).2.1 ≤ (eval q).2.2
+  h_mono1 : ∀ q1 q2 (_hq1 : 1 ≤ q1) (_hq2 : 1 ≤ q2), q1 ≤ q2 → (eval q1).1 ≤ (eval q2).1
+  h_mono2 : ∀ q1 q2 (_hq1 : 1 ≤ q1) (_hq2 : 1 ≤ q2), q1 ≤ q2 → (eval q1).2.1 ≤ (eval q2).2.1
+  h_mono3 : ∀ q1 q2 (_hq1 : 1 ≤ q1) (_hq2 : 1 ≤ q2), q1 ≤ q2 → (eval q1).2.2 ≤ (eval q2).2.2
+
+/--
+THEOREM: The discrete GeneralizedSystem produces a continuous, monotonically 
+non-decreasing coordinate trajectory satisfying all simplex ordering constraints.
+-/
+noncomputable def continuousTrajectoryOfSystem (A B : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (hB : Section5.B_min A ≤ B) (hB_star : B < Section5.B_star A)
+    (hL : 1 < Section6.L A B) : ContinuousAdmissibleTrajectory2 where
+  eval := fun q ↦
+    if hq : 1 ≤ q then
+      eval_system A B hL q hq
+    else
+      (Section6.c A, A, A)
+  h_sum := by
+    intro q hq
+    simp only [hq, dite_true]
+    exact eval_sum A B hA1 hA2 hB hB_star hL q hq
+  h_order := by
+    intro q hq
+    simp only [hq, dite_true]
+    exact eval_order A B hA1 hA2 hB hB_star hL q hq
+  h_mono1 := by
+    intro q1 q2 hq1 hq2 h_le
+    simp only [hq1, hq2, dite_true]
+    exact eval_P1_monotone A B hA1 hA2 hB hB_star hL hq1 hq2 h_le
+  h_mono2 := by
+    intro q1 q2 hq1 hq2 h_le
+    simp only [hq1, hq2, dite_true]
+    exact eval_P2_monotone A B hA1 hA2 hB hB_star hL hq1 hq2 h_le
+  h_mono3 := by
+    intro q1 q2 hq1 hq2 h_le
+    simp only [hq1, hq2, dite_true]
+    exact eval_P3_monotone A B hA1 hA2 hB hB_star hL hq1 hq2 h_le
+
+end TrajectoryContinuity
