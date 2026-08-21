@@ -2314,3 +2314,55 @@ theorem V_eq (ha : a = 1 - m * A) :
   ring
 
 end GeneralIntermediate
+
+/-!
+ Section 8.4: Threshold Boundary Contraction Rate
+Verifying the polynomial identity N(r) and the strict positivity of the boundary phase.
+-/
+
+namespace ThresholdBoundary
+
+variable (m r : ℝ)
+
+/-- The cycle-boundary average at the transition limit. -/
+noncomputable def C0 : ℝ := ((2 * m - 1) * r + (m - 1)^2) / (m + r)
+
+/-- The target rate at the transition limit. -/
+noncomputable def TargetRate : ℝ := (m * (m - 1) * r) / (1 + (m - 1) * r)
+
+/-- 
+Verifying the massive numerator expansion N(r).
+Lean's `ring` tactic checks the full algebraic factorization.
+-/
+theorem N_r_expansion :
+    ((2 * m - 1) * r + (m - 1)^2) * (1 + (m - 1) * r) - m * (m - 1) * r * (m + r) = 
+    (m - 1)^2 * (1 - r)^2 + m * r := by
+  ring
+
+/-- 
+Proving the strict positivity of the subtraction C_0 - TargetRate.
+This confirms the phase average forces the minimum to the interior limit q2.
+-/
+theorem boundary_strictly_exceeds_target 
+    (hm_ge_2 : 2 ≤ m) 
+    (hr_pos : 0 < r) 
+    (_hr_lt_one : r < 1) :
+    TargetRate m r < C0 m r := by
+  dsimp [C0, TargetRate]
+  
+  -- The denominators are strictly positive
+  have h_denom1 : 0 < m + r := by linarith
+  have h_denom2 : 0 < 1 + (m - 1) * r := by nlinarith
+    
+  -- Cross-multiply fractions
+  rw [div_lt_div_iff₀ h_denom2 h_denom1]
+  
+  -- Numerator remainder is strictly positive: (m-1)²(1-r)² ≥ 0 and m*r > 0
+  have hm_pos : 0 < m := by linarith
+  have h_pos : 0 < (m - 1)^2 * (1 - r)^2 + m * r := by positivity
+  
+  -- Combine with the verified N(r) polynomial expansion
+  have h_exp := N_r_expansion m r
+  linarith [h_exp, h_pos]
+
+end ThresholdBoundary
