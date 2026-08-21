@@ -1910,7 +1910,7 @@ theorem uniform_first_renewal
 end UniformFreezing
 
 /-!
-# Section 9: Deductive Bridges (Instantiating GeneralizedSystem)
+ Section 9: Deductive Bridges (Instantiating GeneralizedSystem)
 -/
 
 namespace LinearPiece
@@ -2105,3 +2105,119 @@ theorem lower_bound_bridge_remaining_range (U W : ℝ) (D_low : ℝ)
   · exact h_rate
 
 end DeductiveBridges
+
+/-!
+ Global Surgery & Canonical Contact Reduction
+Verifying the universal replacement of partial contacts for m ≥ 3.
+-/
+
+namespace GlobalSurgery
+
+variable (m k T : ℝ)
+
+/-!  1. Time-Fraction Definitions -/
+
+/-- Duration of the extreme singleton [d,d] block (k₁ = 1, slope = 1). -/
+noncomputable def t1 : ℝ := ((m - k) / (k * (m - 1))) * T
+
+/-- Duration of the full-width boundary [2,d] block (k₂ = m, slope = 1/m). -/
+noncomputable def t2 : ℝ := ((m * (k - 1)) / (k * (m - 1))) * T
+
+/-!  2. Positivity of Durations -/
+
+/-- For 1 ≤ k ≤ m and T ≥ 0 with m > 1, the duration t₁ is non-negative. -/
+theorem t1_nonneg (hm : 1 < m) (hk_ge : 1 ≤ k) (hkm : k ≤ m) (hT : 0 ≤ T) :
+    0 ≤ t1 m k T := by
+  dsimp [t1]
+  have h_num : 0 ≤ m - k := by linarith
+  have h_den : 0 < k * (m - 1) := mul_pos (by linarith) (by linarith)
+  exact mul_nonneg (div_nonneg h_num (le_of_lt h_den)) hT
+
+/-- For 1 ≤ k ≤ m and T ≥ 0 with m > 1, the duration t₂ is non-negative. -/
+theorem t2_nonneg (hm : 1 < m) (hk_ge : 1 ≤ k) (_hkm : k ≤ m) (hT : 0 ≤ T) :
+    0 ≤ t2 m k T := by
+  dsimp [t2]
+  have h_num : 0 ≤ m * (k - 1) := mul_nonneg (by linarith) (by linarith)
+  have h_den : 0 < k * (m - 1) := mul_pos (by linarith) (by linarith)
+  exact mul_nonneg (div_nonneg h_num (le_of_lt h_den)) hT
+
+/-- For a strict partial contact 1 < k < m and T > 0, duration t₁ is strictly positive. -/
+theorem t1_pos (_hm : 1 < m) (hk : 1 < k) (hkm : k < m) (hT : 0 < T) :
+    0 < t1 m k T := by
+  dsimp [t1]
+  have h_num : 0 < m - k := by linarith
+  have h_den : 0 < k * (m - 1) := mul_pos (by linarith) (by linarith)
+  exact mul_pos (div_pos h_num h_den) hT
+
+/-- For a strict partial contact 1 < k < m and T > 0, duration t₂ is strictly positive. -/
+theorem t2_pos (_hm : 1 < m) (hk : 1 < k) (hkm : k < m) (hT : 0 < T) :
+    0 < t2 m k T := by
+  dsimp [t2]
+  have h_num : 0 < m * (k - 1) := mul_pos (by linarith) (by linarith)
+  have h_den : 0 < k * (m - 1) := mul_pos (by linarith) (by linarith)
+  exact mul_pos (div_pos h_num h_den) hT
+
+/-!  3. Boundary Conservation Constraints -/
+
+/--
+SURGERY PRESERVES DURATION:
+The sum of the perturbed durations exactly equals the original duration T.
+-/
+theorem surgery_preserves_time (hk : k ≠ 0) (hm : m - 1 ≠ 0) :
+    t1 m k T + t2 m k T = T := by
+  dsimp [t1, t2]
+  field_simp
+  ring
+
+/--
+SURGERY PRESERVES TOP-COORDINATE DISPLACEMENT:
+The original partial block displaces P_d by (1/k) * T.
+The perturbed sequence displaces P_d by 1 * t₁ + (1/m) * t₂ = T / k.
+-/
+theorem surgery_preserves_displacement (hk : k ≠ 0) (hm_sub : m - 1 ≠ 0) (hm : m ≠ 0) :
+    1 * t1 m k T + (1 / m) * t2 m k T = T / k := by
+  dsimp [t1, t2]
+  field_simp
+  ring
+
+/-!  4. Contraction Mass & Variational Gain -/
+
+/-- Contraction mass of the original partial block: δ = k - 1 over duration T. -/
+noncomputable def delta_orig : ℝ := (k - 1) * T
+
+/-- Perturbed contraction mass: δ₁ = 0 on [d,d] and δ₂ = m - 1 on [2,d]. -/
+noncomputable def delta_pert : ℝ := 0 * t1 m k T + (m - 1) * t2 m k T
+
+/-- Accumulated defect mass of the partial-contact block: Q = e(k) * T. -/
+noncomputable def defect_orig : ℝ := (((k - 1) * (m - k)) / k) * T
+
+/--
+SURGERY CONTRACTION GAIN IDENTITY:
+The increase in total contraction mass under the canonical surgery matches
+the accumulated defect Q(T) of the original partial contact.
+-/
+theorem surgery_contraction_gain (hk : k ≠ 0) (hm_sub : m - 1 ≠ 0) :
+    delta_pert m k T - delta_orig k T = defect_orig m k T := by
+  dsimp [delta_pert, delta_orig, defect_orig, t1, t2]
+  field_simp
+  ring
+
+/--
+STRICT VARIATIONAL IMPROVEMENT:
+For any strict partial contact (1 < k < m) over positive duration T > 0,
+the perturbed trajectory strictly increases the total contraction mass.
+-/
+theorem surgery_strictly_improves (_hm : 1 < m) (hk : 1 < k) (hkm : k < m) (hT : 0 < T) :
+    delta_orig k T < delta_pert m k T := by
+  have hk0 : k ≠ 0 := by linarith
+  have hm1 : m - 1 ≠ 0 := by linarith
+  have h_gain := surgery_contraction_gain m k T hk0 hm1
+  have h_def_pos : 0 < defect_orig m k T := by
+    dsimp [defect_orig]
+    have h1 : 0 < k - 1 := by linarith
+    have h2 : 0 < m - k := by linarith
+    have hk_pos : 0 < k := by linarith
+    exact mul_pos (div_pos (mul_pos h1 h2) hk_pos) hT
+  linarith
+
+end GlobalSurgery
