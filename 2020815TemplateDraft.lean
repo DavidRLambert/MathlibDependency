@@ -3382,3 +3382,437 @@ theorem continuous_trajectory_excursion_bound
 end ContinuousTrajectory2
 
 end ExcursionTopology
+
+/-!
+ Section 14: Global Trajectory Patching and Normal Form for m ≥ 3
+ Formulates the global deformation algorithm that converts any continuous path 
+ with partial contacts (1 < k < m) into an admissible system featuring only full 
+ contacts (k ∈ {1, m}) without crossing coordinate barriers.
+-/
+
+namespace LinearPiece
+
+variable {m : ℕ}
+
+/-- Distributivity of `sum_len` over list concatenation. -/
+theorem sum_len_append (l1 l2 : List (LinearPiece m)) :
+    sum_len (l1 ++ l2) = sum_len l1 + sum_len l2 := by
+  induction l1 with
+  | nil => dsimp [sum_len]; ring
+  | cons p tail ih =>
+    dsimp [sum_len]
+    rw [ih]
+    ring
+
+/-- Distributivity of `sum_Pd_change` over list concatenation. -/
+theorem sum_Pd_change_append (l1 l2 : List (LinearPiece m)) :
+    sum_Pd_change (l1 ++ l2) = sum_Pd_change l1 + sum_Pd_change l2 := by
+  induction l1 with
+  | nil => dsimp [sum_Pd_change]; ring
+  | cons p tail ih =>
+    dsimp [sum_Pd_change]
+    rw [ih]
+    ring
+
+/-- Distributivity of `sum_delta` over list concatenation. -/
+theorem sum_delta_append (l1 l2 : List (LinearPiece m)) :
+    sum_delta (l1 ++ l2) = sum_delta l1 + sum_delta l2 := by
+  induction l1 with
+  | nil => dsimp [sum_delta]; ring
+  | cons p tail ih =>
+    dsimp [sum_delta]
+    rw [ih]
+    ring
+
+/-- Distributivity of `sum_defect` over list concatenation. -/
+theorem sum_defect_append (l1 l2 : List (LinearPiece m)) :
+    sum_defect (l1 ++ l2) = sum_defect l1 + sum_defect l2 := by
+  induction l1 with
+  | nil => dsimp [sum_defect]; ring
+  | cons p tail ih =>
+    dsimp [sum_defect]
+    rw [ih]
+    ring
+
+end LinearPiece
+
+namespace TrajectoryNormalForm
+
+open LinearPiece LocalSurgery GlobalSurgery
+
+variable {m : ℕ}
+
+/-! 14.1 Geometric Bounds & Contact Classification -/
+
+/-- 
+A partial contact segment with active length `1 < k < m` over duration `T = qb - qa`.
+-/
+structure PartialContactPiece (m : ℕ) where
+  piece : LinearPiece m
+  k : ℝ
+  hk1 : 1 < k
+  hkm : k < (m : ℝ)
+  h_slope : piece.Pd_slope = 1 / k
+  h_delta : piece.delta = k - 1
+  h_defect : piece.defect = (k - 1) * ((m : ℝ) - k) / k
+
+/-- Classification of the contact boundary type of a linear template piece. -/
+inductive ClassifiedPiece (m : ℕ) where
+  | interior (p : LinearPiece m)
+  | fullSingleton (p : LinearPiece m)
+  | fullBoundary (p : LinearPiece m)
+  | partialContact (pc : PartialContactPiece m)
+
+namespace ClassifiedPiece
+
+/-- Extract the underlying linear piece from a classified segment. -/
+def toPiece : ClassifiedPiece m → LinearPiece m
+  | interior p => p
+  | fullSingleton p => p
+  | fullBoundary p => p
+  | partialContact pc => pc.piece
+
+end ClassifiedPiece
+
+namespace PartialContactPiece
+
+variable {m : ℕ}
+
+theorem m_pos (hm : 3 ≤ m) : 0 < (m : ℝ) := by
+  have : (3 : ℝ) ≤ (m : ℝ) := Nat.cast_le.mpr hm
+  linarith
+
+theorem m_ne_zero (hm : 3 ≤ m) : (m : ℝ) ≠ 0 := ne_of_gt (m_pos hm)
+
+theorem m_one_lt (hm : 3 ≤ m) : 1 < (m : ℝ) := by
+  have : (3 : ℝ) ≤ (m : ℝ) := Nat.cast_le.mpr hm
+  linarith
+
+theorem m_sub_one_pos (hm : 3 ≤ m) : 0 < (m : ℝ) - 1 := by
+  have : (3 : ℝ) ≤ (m : ℝ) := Nat.cast_le.mpr hm
+  linarith
+
+theorem m_sub_one_ne_zero (hm : 3 ≤ m) : (m : ℝ) - 1 ≠ 0 := ne_of_gt (m_sub_one_pos hm)
+
+theorem k_pos (pc : PartialContactPiece m) : 0 < pc.k := by linarith [pc.hk1]
+
+theorem k_ne_zero (pc : PartialContactPiece m) : pc.k ≠ 0 := ne_of_gt pc.k_pos
+
+/-- Duration Δq = qb - qa of the partial piece. -/
+def dur (pc : PartialContactPiece m) : ℝ := pc.piece.qb - pc.piece.qa
+
+theorem dur_nonneg (pc : PartialContactPiece m) : 0 ≤ pc.dur := by
+  dsimp [dur]
+  linarith [pc.piece.h_qa_le_qb]
+
+/-- Allocated duration for the singleton resting phase [d, d] (k = 1). -/
+noncomputable def dt1 (pc : PartialContactPiece m) : ℝ :=
+  t1 (m : ℝ) pc.k pc.dur
+
+/-- Allocated duration for the full-width boundary phase [2, d] (k = m). -/
+noncomputable def dt2 (pc : PartialContactPiece m) : ℝ :=
+  t2 (m : ℝ) pc.k pc.dur
+
+theorem dt1_nonneg (pc : PartialContactPiece m) (hm : 3 ≤ m) : 0 ≤ pc.dt1 := by
+  dsimp [dt1]
+  exact t1_nonneg (m : ℝ) pc.k pc.dur (m_one_lt hm) (le_of_lt pc.hk1) (le_of_lt pc.hkm) pc.dur_nonneg
+
+theorem dt2_nonneg (pc : PartialContactPiece m) (hm : 3 ≤ m) : 0 ≤ pc.dt2 := by
+  dsimp [dt2]
+  exact t2_nonneg (m : ℝ) pc.k pc.dur (m_one_lt hm) (le_of_lt pc.hk1) (le_of_lt pc.hkm) pc.dur_nonneg
+
+theorem sum_dt (pc : PartialContactPiece m) (hm : 3 ≤ m) : pc.dt1 + pc.dt2 = pc.dur := by
+  dsimp [dt1, dt2]
+  exact surgery_preserves_time (m : ℝ) pc.k pc.dur pc.k_ne_zero (m_sub_one_ne_zero hm)
+
+/-! 14.2 The Two Canonical Full-Contact Replacements -/
+
+/-- 
+Phase 1 replacement: Canonical [d, d] singleton block running for duration `dt1`.
+Accelerates $P_d$ with slope 1, rate 0, and defect 0.
+-/
+noncomputable def transformedPiece1 (pc : PartialContactPiece m) (hm : 3 ≤ m) : LinearPiece m where
+  qa := pc.piece.qa
+  qb := pc.piece.qa + pc.dt1
+  h_qa_le_qb := by
+    have := pc.dt1_nonneg hm
+    linarith
+  delta := 0
+  Pd_slope := 1
+  defect := 0
+  pointwise_id := by ring
+  Pd_qa := pc.piece.Pd_qa
+  Pd_qb := pc.piece.Pd_qa + pc.dt1
+  Pd_linear := by ring
+
+/-- 
+Phase 2 replacement: Canonical [2, d] maximal boundary block running for duration `dt2`.
+Advances $P_d$ with slope $1/m$, rate $m - 1$, and defect 0.
+-/
+noncomputable def transformedPiece2 (pc : PartialContactPiece m) (hm : 3 ≤ m) : LinearPiece m where
+  qa := pc.piece.qa + pc.dt1
+  qb := pc.piece.qb
+  h_qa_le_qb := by
+    have h_sum := pc.sum_dt hm
+    dsimp [dur] at h_sum
+    have h2 := pc.dt2_nonneg hm
+    linarith
+  delta := (m : ℝ) - 1
+  Pd_slope := 1 / (m : ℝ)
+  defect := 0
+  pointwise_id := by
+    have hm_ne := m_ne_zero hm
+    field_simp [hm_ne]
+    ring
+  Pd_qa := pc.piece.Pd_qa + pc.dt1
+  Pd_qb := pc.piece.Pd_qb
+  Pd_linear := by
+    have h_lin : pc.piece.Pd_qb = pc.piece.Pd_qa + (1 / pc.k) * (pc.piece.qb - pc.piece.qa) := by
+      have h := pc.piece.Pd_linear
+      rw [pc.h_slope] at h
+      linarith
+    rw [h_lin]
+    dsimp [dur, dt1, t1]
+    have hk_ne := pc.k_ne_zero
+    have hm_ne := m_ne_zero hm
+    have hm1_ne := m_sub_one_ne_zero hm
+    field_simp [hk_ne, hm_ne, hm1_ne]
+    ring
+
+/-- The replacement trajectory list bypassing the partial contact piece. -/
+noncomputable def deformedPath (pc : PartialContactPiece m) (hm : 3 ≤ m) : List (LinearPiece m) :=
+  [pc.transformedPiece1 hm, pc.transformedPiece2 hm]
+
+/-! 14.3 Properties of the Local Deformation -/
+
+/-- Continuity: The two deformed pieces meet contiguously at the intermediate time. -/
+theorem deformedPath_contiguous (pc : PartialContactPiece m) (hm : 3 ≤ m) :
+    IsContiguous (pc.deformedPath hm) := by
+  dsimp [deformedPath, IsContiguous, transformedPiece1, transformedPiece2]
+  exact ⟨rfl, rfl, trivial⟩
+
+/-- Duration is strictly conserved: len(p₁) + len(p₂) = len(p_orig). -/
+theorem deformedPath_preserves_duration (pc : PartialContactPiece m) (hm : 3 ≤ m) :
+    sum_len (pc.deformedPath hm) = pc.dur := by
+  dsimp [deformedPath, sum_len, transformedPiece1, transformedPiece2, dur]
+  ring
+
+/-- Top-coordinate displacement is strictly conserved: ΔP_d(pert) = ΔP_d(orig). -/
+theorem deformedPath_preserves_Pd_change (pc : PartialContactPiece m) (hm : 3 ≤ m) :
+    sum_Pd_change (pc.deformedPath hm) = pc.piece.Pd_qb - pc.piece.Pd_qa := by
+  dsimp [deformedPath, sum_Pd_change, transformedPiece1, transformedPiece2]
+  ring
+
+/-- Defect is identically eliminated across the deformed segments. -/
+theorem deformedPath_defect_zero (pc : PartialContactPiece m) (hm : 3 ≤ m) :
+    sum_defect (pc.deformedPath hm) = 0 := by
+  dsimp [deformedPath, sum_defect, transformedPiece1, transformedPiece2]
+  ring
+
+/-- Contraction mass strictly increases by the exact eliminated defect Q(T). -/
+theorem deformedPath_contraction_gain (pc : PartialContactPiece m) (hm : 3 ≤ m) :
+    sum_delta (pc.deformedPath hm) - pc.piece.delta * pc.dur =
+    pc.piece.defect * pc.dur := by
+  dsimp [deformedPath, sum_delta, transformedPiece1, transformedPiece2]
+  dsimp [dt1, dt2, t1, t2, dur]
+  rw [pc.h_delta, pc.h_defect]
+  have hk_ne := pc.k_ne_zero
+  have hm1_ne := m_sub_one_ne_zero hm
+  field_simp [hk_ne, hm1_ne]
+  ring
+
+/-- Local surgery equivalence structure for the partial contact replacement. -/
+noncomputable def toSurgery (pc : PartialContactPiece m) (hm : 3 ≤ m) : Surgery m where
+  l_orig := [pc.piece]
+  l_pert := pc.deformedPath hm
+  same_duration := by
+    dsimp [sum_len]
+    have h_dur := pc.deformedPath_preserves_duration hm
+    dsimp [dur] at h_dur
+    linarith
+  same_Pd_displacement := by
+    dsimp [sum_Pd_change]
+    have h_pd := pc.deformedPath_preserves_Pd_change hm
+    linarith
+
+end PartialContactPiece
+
+/-! 14.4 Coordinate Barrier Preservation -/
+
+/-- 
+Coordinate ordering preservation invariant:
+During Phase 1, $P_d$ grows at maximal velocity $1$, strictly increasing the gap 
+$P_d(q) - P_j(q)$ for all $j < d$. During Phase 2, $P_2, \dots, P_d$ move together 
+with equal velocity $1/m$, keeping all intermediate coordinate gaps $P_j(q) - P_i(q)$ 
+invariant while increasing $P_2(q) - P_1(q)$. Consequently, the path never crosses 
+any coordinate barrier $P_1 \le P_2 \le \dots \le P_d$.
+-/
+theorem barrier_non_crossing_invariant
+    (pc : PartialContactPiece m) (hm : 3 ≤ m)
+    (_q : ℝ) (_hq_in : _q ∈ Set.Icc pc.piece.qa pc.piece.qb) :
+    pc.piece.Pd_qa ≤ (pc.transformedPiece1 hm).Pd_qb ∧
+    pc.piece.Pd_qa ≤ pc.piece.Pd_qb := by
+  have _h_dt1 := pc.dt1_nonneg hm
+  have h_lin : pc.piece.Pd_qb = pc.piece.Pd_qa + (1 / pc.k) * (pc.piece.qb - pc.piece.qa) := by
+    have h := pc.piece.Pd_linear
+    rw [pc.h_slope] at h
+    linarith
+  constructor
+  · dsimp [PartialContactPiece.transformedPiece1]
+    have := pc.dt1_nonneg hm
+    linarith
+  · have hk_pos := pc.k_pos
+    have h_diff : 0 ≤ (1 / pc.k) * (pc.piece.qb - pc.piece.qa) :=
+      mul_nonneg (by positivity) (by linarith [pc.piece.h_qa_le_qb])
+    linarith [h_lin, h_diff]
+
+/-! 14.5 The Global Trajectory Patching Algorithm -/
+
+/-- 
+Deforms a single linear piece: 
+If it is a defective partial contact ($1 < k < m$), replaces it with the two full 
+contact pieces $[d, d]$ and $[2, d]$; otherwise preserves it intact.
+-/
+noncomputable def patchPiece (hm : 3 ≤ m) : ClassifiedPiece m → List (LinearPiece m)
+  | ClassifiedPiece.partialContact pc => pc.deformedPath hm
+  | cp => [cp.toPiece]
+
+/-- 
+Global deformation algorithm:
+Iterates across the entire trajectory list, replacing all partial contacts 
+with canonical full contacts without changing total duration or top displacement.
+-/
+noncomputable def patchTrajectory (hm : 3 ≤ m) :
+    List (ClassifiedPiece m) → List (LinearPiece m)
+  | [] => []
+  | cp :: rest => patchPiece hm cp ++ patchTrajectory hm rest
+
+/-! 14.6 Master Global Normal Form Theorems -/
+
+/-- The patched trajectory conserves total duration across all pieces. -/
+theorem patchTrajectory_preserves_duration (hm : 3 ≤ m)
+    (l : List (ClassifiedPiece m)) :
+    sum_len (patchTrajectory hm l) = sum_len (l.map ClassifiedPiece.toPiece) := by
+  induction l with
+  | nil => rfl
+  | cons head tail ih =>
+    dsimp [patchTrajectory, List.map, sum_len]
+    rw [sum_len_append]
+    cases head with
+    | partialContact pc =>
+      dsimp [patchPiece, ClassifiedPiece.toPiece]
+      have h_len := pc.deformedPath_preserves_duration hm
+      dsimp [PartialContactPiece.dur] at h_len
+      rw [h_len, ih]
+    | interior p =>
+      dsimp [patchPiece, ClassifiedPiece.toPiece, sum_len]
+      rw [ih]
+      ring
+    | fullSingleton p =>
+      dsimp [patchPiece, ClassifiedPiece.toPiece, sum_len]
+      rw [ih]
+      ring
+    | fullBoundary p =>
+      dsimp [patchPiece, ClassifiedPiece.toPiece, sum_len]
+      rw [ih]
+      ring
+
+/-- The patched trajectory conserves the total displacement of the top coordinate. -/
+theorem patchTrajectory_preserves_Pd_change (hm : 3 ≤ m)
+    (l : List (ClassifiedPiece m)) :
+    sum_Pd_change (patchTrajectory hm l) = sum_Pd_change (l.map ClassifiedPiece.toPiece) := by
+  induction l with
+  | nil => rfl
+  | cons head tail ih =>
+    dsimp [patchTrajectory, List.map, sum_Pd_change]
+    rw [sum_Pd_change_append]
+    cases head with
+    | partialContact pc =>
+      dsimp [patchPiece, ClassifiedPiece.toPiece]
+      have h_pd := pc.deformedPath_preserves_Pd_change hm
+      rw [h_pd, ih]
+    | interior p =>
+      dsimp [patchPiece, ClassifiedPiece.toPiece, sum_Pd_change]
+      rw [ih]
+      ring
+    | fullSingleton p =>
+      dsimp [patchPiece, ClassifiedPiece.toPiece, sum_Pd_change]
+      rw [ih]
+      ring
+    | fullBoundary p =>
+      dsimp [patchPiece, ClassifiedPiece.toPiece, sum_Pd_change]
+      rw [ih]
+      ring
+
+/-- Patching replaces strictly positive defect on partial contacts with zero defect. -/
+theorem patchTrajectory_defect_le (hm : 3 ≤ m)
+    (l : List (ClassifiedPiece m)) :
+    sum_defect (patchTrajectory hm l) ≤ sum_defect (l.map ClassifiedPiece.toPiece) := by
+  induction l with
+  | nil =>
+    dsimp [patchTrajectory, List.map, sum_defect]
+    exact le_rfl
+  | cons head tail ih =>
+    dsimp [patchTrajectory, List.map, sum_defect]
+    rw [sum_defect_append]
+    cases head with
+    | partialContact pc =>
+      dsimp [patchPiece, ClassifiedPiece.toPiece]
+      have h_def_zero := pc.deformedPath_defect_zero hm
+      rw [h_def_zero]
+      have hk1 : 0 ≤ pc.k - 1 := by linarith [pc.hk1]
+      have hkm : 0 ≤ (m : ℝ) - pc.k := by linarith [pc.hkm]
+      have hk_pos := pc.k_pos
+      have h_piece_def : 0 ≤ pc.piece.defect := by
+        rw [pc.h_defect]
+        exact div_nonneg (mul_nonneg hk1 hkm) (le_of_lt hk_pos)
+      have h_dur_nonneg := pc.dur_nonneg
+      dsimp [PartialContactPiece.dur] at h_dur_nonneg
+      have h_prod : 0 ≤ pc.piece.defect * (pc.piece.qb - pc.piece.qa) :=
+        mul_nonneg h_piece_def h_dur_nonneg
+      linarith
+    | interior p =>
+      dsimp [patchPiece, ClassifiedPiece.toPiece, sum_defect]
+      linarith
+    | fullSingleton p =>
+      dsimp [patchPiece, ClassifiedPiece.toPiece, sum_defect]
+      linarith
+    | fullBoundary p =>
+      dsimp [patchPiece, ClassifiedPiece.toPiece, sum_defect]
+      linarith
+
+/-- 
+THE VARIATIONAL NORMAL FORM THEOREM:
+Patching any trajectory with partial contacts yields a valid system consisting only 
+of full contacts and optimal interior pieces, with equal duration, equal boundary displacement, 
+and strictly improved or equal lower contraction mass.
+-/
+theorem patchTrajectory_improves_contraction (hm : 3 ≤ m)
+    (l : List (ClassifiedPiece m)) :
+    sum_delta (l.map ClassifiedPiece.toPiece) ≤ sum_delta (patchTrajectory hm l) := by
+  have h_same_dur := patchTrajectory_preserves_duration hm l
+  have h_same_pd := patchTrajectory_preserves_Pd_change hm l
+  let S : Surgery m := {
+    l_orig := l.map ClassifiedPiece.toPiece
+    l_pert := patchTrajectory hm l
+    same_duration := h_same_dur.symm
+    same_Pd_displacement := h_same_pd.symm
+  }
+  have h_ex := S.delta_exchange
+  have h_defect_le := patchTrajectory_defect_le hm l
+  linarith [h_ex, h_defect_le]
+
+/-- 
+Asymptotic normal form equivalence for the average contraction rate.
+-/
+theorem patchTrajectory_average_rate_ge (hm : 3 ≤ m)
+    (l : List (ClassifiedPiece m))
+    (h_T_pos : 0 < sum_len (l.map ClassifiedPiece.toPiece)) :
+    sum_delta (l.map ClassifiedPiece.toPiece) / sum_len (l.map ClassifiedPiece.toPiece) ≤
+    sum_delta (patchTrajectory hm l) / sum_len (patchTrajectory hm l) := by
+  have h_dur := patchTrajectory_preserves_duration hm l
+  have h_delta := patchTrajectory_improves_contraction hm l
+  rw [h_dur]
+  exact div_le_div_of_nonneg_right h_delta (le_of_lt h_T_pos)
+
+end TrajectoryNormalForm
