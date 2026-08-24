@@ -5670,3 +5670,126 @@ theorem theorem_1_1_with_normal_form
       exact ⟨h_empty_all, h_empty_fc⟩
 
 end NormalFormIntegration
+
+/-!
+ Section 21: Transition Limit Matching (W = W_crit)
+
+ Formalization of the general transition boundary continuity between the
+ Lower-Range formula D_low^(m)(U, W) and the Large-W formula m / (1 + W).
+-/
+
+namespace TransitionLimit
+
+open UnifiedTheorems
+
+variable (m U W : ℝ)
+
+/-!  21.1 General Definitions -/
+
+/-- The general Lower-Range dimension candidate formula D_low^{(m)}(U, W) for arbitrary m. -/
+noncomputable def D_low_m (m U W : ℝ) : ℝ :=
+  ((m - 1) * (1 - (m - 1) * U) * (m * U - 1) * W^2 +
+    U * ((m^2 + 1) - m * (m^2 - m + 1) * U) * W - m * U^2) /
+  (U * (W + 1) * (m * (1 - (m - 1) * U) * W - U))
+
+/-- The transition boundary W_crit(m, U) = U / ((m - 1)(1 - (m - 1)U)). -/
+noncomputable def W_crit (m U : ℝ) : ℝ :=
+  U / ((m - 1) * (1 - (m - 1) * U))
+
+/-- The defect penalty term measuring the discrepancy from the Large-W rate m / (1 + W). -/
+noncomputable def defect_penalty (m U W : ℝ) : ℝ :=
+  ((1 - m * U) * W * (U - (m - 1) * (1 - (m - 1) * U) * W)) /
+  (U * (W + 1) * (m * (1 - (m - 1) * U) * W - U))
+
+/-!  21.2 Defect Decomposition and Vanishing Lemmas -/
+
+/-- 
+Exact additive decomposition:
+  D_low^{(m)}(U, W) = m / (1 + W) + defect_penalty(m, U, W).
+-/
+theorem D_low_m_eq_large_W_add_penalty
+    (hU : U ≠ 0) (hW1 : W + 1 ≠ 0)
+    (h_denom : m * (1 - (m - 1) * U) * W - U ≠ 0) :
+    D_low_m m U W = m / (1 + W) + defect_penalty m U W := by
+  dsimp [D_low_m, defect_penalty]
+  have hW_comm : 1 + W = W + 1 := by ring
+  rw [hW_comm]
+  have h_all_denom : U * (W + 1) * (m * (1 - (m - 1) * U) * W - U) ≠ 0 :=
+    mul_ne_zero (mul_ne_zero hU hW1) h_denom
+  field_simp [hU, hW1, h_denom, h_all_denom]
+  ring
+
+/-- 
+The defect penalty term vanishes identically at the transition boundary W = W_crit:
+  defect_penalty(m, U, W_crit) = 0.
+-/
+theorem defect_penalty_vanishes_at_W_crit
+    (hm1 : m - 1 ≠ 0)
+    (hU_crit : 1 - (m - 1) * U ≠ 0) :
+    defect_penalty m U (W_crit m U) = 0 := by
+  dsimp [defect_penalty, W_crit]
+  have h_crit_denom : (m - 1) * (1 - (m - 1) * U) ≠ 0 := mul_ne_zero hm1 hU_crit
+  have h_factor_zero : U - (m - 1) * (1 - (m - 1) * U) * (U / ((m - 1) * (1 - (m - 1) * U))) = 0 := by
+    rw [mul_div_cancel₀ U h_crit_denom]
+    ring
+  rw [h_factor_zero, mul_zero, zero_div]
+
+/-!  21.3 Main Transition Limit Matching Theorem -/
+
+/-- 
+TRANSITION LIMIT MATCHING THEOREM:
+Evaluating D_low^{(m)}(U, W) at W = W_crit yields exactly m / (1 + W_crit), 
+ensuring seamless continuous matching with the Large-W formula across the phase boundary.
+-/
+theorem D_low_m_at_W_crit
+    (hU : U ≠ 0)
+    (hm1 : m - 1 ≠ 0)
+    (hU_crit : 1 - (m - 1) * U ≠ 0)
+    (hW_crit1 : W_crit m U + 1 ≠ 0)
+    (h_denom : m * (1 - (m - 1) * U) * (W_crit m U) - U ≠ 0) :
+    D_low_m m U (W_crit m U) = m / (1 + W_crit m U) := by
+  rw [D_low_m_eq_large_W_add_penalty m U (W_crit m U) hU hW_crit1 h_denom]
+  rw [defect_penalty_vanishes_at_W_crit m U hm1 hU_crit]
+  ring
+
+/-!  21.4 Specialization to m = 2 -/
+
+/-- For m = 2, the general formula D_low_m 2 U W specializes to UnifiedTheorems.D_low U W. -/
+theorem D_low_m_two_eq_D_low (U W : ℝ) :
+    D_low_m 2 U W = UnifiedTheorems.D_low U W := by
+  dsimp [D_low_m, UnifiedTheorems.D_low]
+  have h_num : (2 - 1 : ℝ) * (1 - (2 - 1) * U) * (2 * U - 1) * W^2 +
+      U * ((2^2 + 1 : ℝ) - 2 * (2^2 - 2 + 1) * U) * W - 2 * U^2 =
+      (1 - U) * (2 * U - 1) * W^2 + U * (5 - 6 * U) * W - 2 * U^2 := by ring
+  have h_den : U * (W + 1) * (2 * (1 - (2 - 1 : ℝ) * U) * W - U) =
+      U * (W + 1) * (2 * (1 - U) * W - U) := by ring
+  rw [h_num, h_den]
+
+/-- Boundary matching for m = 2 at W = U / (1 - U). -/
+theorem D_low_two_at_W_crit
+    (hU : U ≠ 0)
+    (hU1 : 1 - U ≠ 0)
+    (hW1 : W_crit 2 U + 1 ≠ 0)
+    (h_denom : 2 * (1 - U) * (W_crit 2 U) - U ≠ 0) :
+    UnifiedTheorems.D_low U (W_crit 2 U) = 2 / (1 + W_crit 2 U) := by
+  rw [← D_low_m_two_eq_D_low]
+  have hm1 : (2 : ℝ) - 1 ≠ 0 := by norm_num
+  have hU_crit : 1 - ((2 : ℝ) - 1) * U ≠ 0 := by
+    have : 1 - ((2 : ℝ) - 1) * U = 1 - U := by ring
+    rwa [this]
+  have h_denom_crit : (2 : ℝ) * (1 - ((2 : ℝ) - 1) * U) * (W_crit 2 U) - U ≠ 0 := by
+    have : (2 : ℝ) * (1 - ((2 : ℝ) - 1) * U) * (W_crit 2 U) - U = 2 * (1 - U) * (W_crit 2 U) - U := by ring
+    rwa [this]
+  exact D_low_m_at_W_crit 2 U hU hm1 hU_crit hW1 h_denom_crit
+
+/-- Connection to UnifiedTheorems.LargeW_Target for m = 2. -/
+theorem D_low_two_at_W_crit_eq_largeW_target
+    (hU : U ≠ 0)
+    (hU1 : 1 - U ≠ 0)
+    (hW1 : W_crit 2 U + 1 ≠ 0)
+    (h_denom : 2 * (1 - U) * (W_crit 2 U) - U ≠ 0) :
+    UnifiedTheorems.D_low U (W_crit 2 U) = UnifiedTheorems.LargeW_Target 2 (W_crit 2 U) := by
+  dsimp [UnifiedTheorems.LargeW_Target]
+  exact D_low_two_at_W_crit U hU hU1 hW1 h_denom
+
+end TransitionLimit
