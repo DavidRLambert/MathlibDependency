@@ -6886,3 +6886,76 @@ theorem theorem_1_3
   exact DeductiveBridges.dfsu_sandwich m (GeneralParameterBridge.D_low m U W) U W upper lower
 
 end UnifiedTheorems
+
+/-!
+ Section 26: Phase 5: DFSU Variational Integration (UnifiedTheorems)
+ 
+ Formalization of the Capstone Dimension Spectrum (Theorem 1.3) for all m ≥ 3.
+ Unifies the Large-W dimension formula and the Remaining-Range dimension formula 
+ across the critical transition threshold W_crit(m, U) through the DFSU variational principle.
+-/
+
+namespace DeductiveBridges
+
+-- Export the upper bound bridge from Section 25 to complete the DeductiveBridges API
+export GeneralExcursionRecurrence (upper_bound_bridge_remaining_range_general)
+
+end DeductiveBridges
+
+namespace UnifiedTheorems
+
+open LinearPiece
+open Section4
+open Section6
+open Section7
+open Section8_3
+open GlobalRenewalLimit
+open DeductiveBridges
+open ConstructiveBridges
+open GeneralParameterBridge
+open ConstructiveSection8_3
+open GeneralExcursionRecurrence
+
+/--
+Theorem 1.3 (Complete Dimension Spectrum for all m ≥ 3):
+Unifies the Large-W dimension formula and the Remaining-Range dimension formula 
+across the critical transition threshold W_crit(m, U).
+-/
+theorem theorem_1_3_spectrum (m : ℕ) [hm : Fact (3 ≤ m)] (U W : ℝ)
+    (hW_pos : 0 ≤ W)
+    (hU : U ≠ 0)
+    (h_denom_UW : (m : ℝ) * (1 - ((m : ℝ) - 1) * U) * W - U ≠ 0)
+    (h_large_template : ∃ x, 0 < Section4.L m U W x - 1 ∧
+      (∀ p ∈ Section4.pieces m U W x, 0 ≤ (p : LinearPiece m).defect) ∧
+      sum_Pd_change (Section4.pieces m U W x) / sum_len (Section4.pieces m U W x) = W / (1 + W) ∧
+      (m : ℝ) / (1 + W) ≤ sum_delta (Section4.pieces m U W x) / sum_len (Section4.pieces m U W x))
+    (h_defect_bound : ∀ P : DeductiveBridges.GeneralizedSystem m,
+      DeductiveBridges.has_exponents P U W →
+      GeneralParameterBridge.remaining_range_defect_bound m U W ≤
+        LinearPiece.sum_defect P.period / LinearPiece.sum_len P.period)
+    (h_cycle_exists : ∃ A B, 0 < Section8_3.L_general m A B - 1 ∧
+      1 / ((m : ℝ) + 1) < A ∧ A < 1 / (m : ℝ) ∧
+      A ≠ 0 ∧ Section8_3.denom m A B ≠ 0 ∧ 0 < Section8_3.q2 m A (Section8_3.L_general m A B) ∧
+      A = U / (1 + U) ∧ B = W / (1 + W) ∧ 1 + U ≠ 0 ∧ 1 + W ≠ 0 ∧ U ≠ 0 ∧
+      (m : ℝ) * (1 - ((m : ℝ) - 1) * U) * W - U ≠ 0 ∧
+      0 < ConstructiveSection8_3.N_m m A (Section8_3.L_general m A B) ∧
+      (∃ (h1 : 0 ≤ Section8_3.len1 m A (Section8_3.L_general m A B))
+         (h2 : 0 ≤ Section8_3.len2 m A (Section8_3.L_general m A B))
+         (h3 : 0 ≤ Section8_3.len3 m A (Section8_3.L_general m A B))
+         (h4 : 0 ≤ Section8_3.len4 m A (Section8_3.L_general m A B)),
+        sum_Pd_change (ConstructiveSection8_3.pieces m A (Section8_3.L_general m A B) h1 h2 h3 h4) /
+          sum_len (ConstructiveSection8_3.pieces m A (Section8_3.L_general m A B) h1 h2 h3 h4) = W / (1 + W))) :
+    (U / (((m : ℝ) - 1) * (1 - ((m : ℝ) - 1) * U)) ≤ W →
+      DeductiveBridges.dim_H_E m U W = LargeW_Target m W) ∧
+    (W ≤ U / (((m : ℝ) - 1) * (1 - ((m : ℝ) - 1) * U)) →
+      DeductiveBridges.dim_H_E m U W = GeneralParameterBridge.D_low m U W) := by
+  constructor
+  · intro _hW_large
+    have upper := DeductiveBridges.upper_bound_bridge_large_W m U W hW_pos
+    have lower := DeductiveBridges.lower_bound_bridge_large_W m U W h_large_template
+    exact DeductiveBridges.dfsu_sandwich m (LargeW_Target m W) U W upper lower
+  · intro _hW_rem
+    have hW1 : (1 : ℝ) + W ≠ 0 := by linarith [hW_pos]
+    exact theorem_1_3 m U W hW_pos hU hW1 h_denom_UW h_defect_bound h_cycle_exists
+
+end UnifiedTheorems
