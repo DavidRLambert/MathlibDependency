@@ -6036,3 +6036,153 @@ theorem denom_factor_ne_zero_on_admissible_domain
   ne_of_gt (denom_factor_pos_on_admissible_domain m A B hm hA1 hA2 hB_low hB_high)
 
 end LowerFeasibilityBoundary
+
+/-!
+ Section 23: Phase 2 Formal Algebraic Lemmas (Parameter Bridge: Section8_3 → Section7)
+
+ Formalizing the Diophantine parameterization of the remaining-range defect bound,
+ formulating D_low^{(m)}(U, W), and proving the general phase average equivalence at q₂.
+-/
+
+namespace GeneralParameterBridge
+
+open Section8_3 TransitionLimit
+
+variable (m : ℕ)
+variable (U W A B : ℝ)
+
+/-!  23.1 Parameter Bridge Definitions -/
+
+/-- General dimension parameter d₀(m, A) = (m + 1)A - 1 generalizing Section 6. -/
+def d0 (m : ℕ) (A : ℝ) : ℝ := ((m : ℝ) + 1) * A - 1
+
+/-- Defect lower-bound target for general m in the Remaining Range. -/
+noncomputable def remaining_range_defect_bound (m : ℕ) (U W : ℝ) : ℝ :=
+  (((m : ℝ) * U - 1) * W * (U - ((m : ℝ) - 1) * (1 - ((m : ℝ) - 1) * U) * W)) /
+  (U * (W + 1) * ((m : ℝ) * (1 - ((m : ℝ) - 1) * U) * W - U))
+
+/-- The general Lower-Range dimension candidate D_low^{(m)}(U, W). -/
+noncomputable def D_low (m : ℕ) (U W : ℝ) : ℝ :=
+  (((m : ℝ) - 1) * (1 - ((m : ℝ) - 1) * U) * ((m : ℝ) * U - 1) * W^2 +
+    U * (((m : ℝ)^2 + 1) - (m : ℝ) * ((m : ℝ)^2 - (m : ℝ) + 1) * U) * W - (m : ℝ) * U^2) /
+  (U * (W + 1) * ((m : ℝ) * (1 - ((m : ℝ) - 1) * U) * W - U))
+
+/-!  23.2 Specialization and Compatibility Lemmas -/
+
+/-- Compatibility check: d₀(2, A) coincides with Section6.d0(A) = 3A - 1. -/
+theorem d0_two_eq (A : ℝ) : d0 2 A = Section6.d0 A := by
+  dsimp [d0, Section6.d0]
+  ring
+
+/-- Definition equivalence: D_low matches TransitionLimit.D_low_m. -/
+theorem D_low_eq_D_low_m (m : ℕ) (U W : ℝ) :
+    D_low m U W = TransitionLimit.D_low_m (m : ℝ) U W := rfl
+
+/-- Section 8.3 denominator specialization for m = 2. -/
+theorem denom_two_eq (A B : ℝ) :
+    Section8_3.denom 2 A B = A - B * (A + (1 - 2 * A)) := by
+  dsimp [Section8_3.denom, Section8_3.a]
+  ring
+
+/-!  23.3 Algebraic Reduction of L_general - 1 -/
+
+/-- Exact fractional reduction of Section8_3.L_general - 1 into a single quotient. -/
+theorem L_general_sub_one (m : ℕ) (A B : ℝ) (h_denom : Section8_3.denom m A B ≠ 0) :
+    Section8_3.L_general m A B - 1 =
+    (Section8_3.a m A * B - Section8_3.denom m A B) / Section8_3.denom m A B := by
+  dsimp [Section8_3.L_general]
+  field_simp [h_denom]
+
+/-!  23.4 The Defect Decomposition Identity -/
+
+/--
+THEOREM (D_low_def):
+The general Lower-Range formula decomposes into the Large-W rate minus the remaining range defect bound:
+  D_low^{(m)}(U, W) = m / (1 + W) - remaining_range_defect_bound(m, U, W).
+-/
+theorem D_low_def (m : ℕ) (U W : ℝ)
+    (hU : U ≠ 0) (hW1 : 1 + W ≠ 0)
+    (h_denom : (m : ℝ) * (1 - ((m : ℝ) - 1) * U) * W - U ≠ 0) :
+    D_low m U W = (m : ℝ) / (1 + W) - remaining_range_defect_bound m U W := by
+  dsimp [D_low, remaining_range_defect_bound]
+  have hW_comm : W + 1 = 1 + W := by ring
+  have h_all_denom : U * (1 + W) * ((m : ℝ) * (1 - ((m : ℝ) - 1) * U) * W - U) ≠ 0 := by
+    have h1 : U * (1 + W) ≠ 0 := mul_ne_zero hU hW1
+    exact mul_ne_zero h1 h_denom
+  rw [hW_comm]
+  field_simp [hU, hW1, h_denom, h_all_denom]
+  ring
+
+/-!  23.5 Terminal Defect Ratio Equivalence -/
+
+/-- Parameterized bridge equating the discrete cycle defect ratio to the Diophantine defect bound. -/
+theorem d0_B_div_A_Lm1_eq_defect_bound (m : ℕ) (U W A B : ℝ)
+    (hA : A = U / (1 + U))
+    (hB : B = W / (1 + W))
+    (hU1 : 1 + U ≠ 0)
+    (hW1 : 1 + W ≠ 0)
+    (hU : U ≠ 0)
+    (hA_ne : A ≠ 0)
+    (h_denom_L : Section8_3.denom m A B ≠ 0)
+    (h_Lm1 : Section8_3.L_general m A B - 1 ≠ 0)
+    (h_denom_UW : (m : ℝ) * (1 - ((m : ℝ) - 1) * U) * W - U ≠ 0) :
+    (d0 m A * B) / (A * (Section8_3.L_general m A B - 1)) =
+    remaining_range_defect_bound m U W := by
+  rw [L_general_sub_one m A B h_denom_L]
+  have h_diff_ne : Section8_3.a m A * B - Section8_3.denom m A B ≠ 0 := by
+    intro h
+    apply h_Lm1
+    rw [L_general_sub_one m A B h_denom_L, h, zero_div]
+  dsimp [d0, remaining_range_defect_bound, Section8_3.a, Section8_3.denom]
+  rw [hA, hB]
+  have hW_comm : W + 1 = 1 + W := by ring
+  have h_inner : U * (1 + W) * ((m : ℝ) * (1 - ((m : ℝ) - 1) * U) * W - U) ≠ 0 := by
+    have h1 : U * (1 + W) ≠ 0 := mul_ne_zero hU hW1
+    exact mul_ne_zero h1 h_denom_UW
+  have hU_frac_ne : U / (1 + U) ≠ 0 := by rwa [← hA]
+  have h_denom_sub_ne : (U / (1 + U)) - (W / (1 + W)) * ((U / (1 + U)) + ((m : ℝ) - 1) * (1 - (m : ℝ) * (U / (1 + U)))) ≠ 0 := by
+    have : (U / (1 + U)) - (W / (1 + W)) * ((U / (1 + U)) + ((m : ℝ) - 1) * (1 - (m : ℝ) * (U / (1 + U)))) = Section8_3.denom m A B := by
+      dsimp [Section8_3.denom, Section8_3.a]
+      rw [← hA, ← hB]
+    rwa [this]
+  have h_num_diff_ne : (1 - (m : ℝ) * (U / (1 + U))) * (W / (1 + W)) -
+      ((U / (1 + U)) - (W / (1 + W)) * ((U / (1 + U)) + ((m : ℝ) - 1) * (1 - (m : ℝ) * (U / (1 + U))))) ≠ 0 := by
+    have : (1 - (m : ℝ) * (U / (1 + U))) * (W / (1 + W)) -
+        ((U / (1 + U)) - (W / (1 + W)) * ((U / (1 + U)) + ((m : ℝ) - 1) * (1 - (m : ℝ) * (U / (1 + U))))) =
+        Section8_3.a m A * B - Section8_3.denom m A B := by
+      dsimp [Section8_3.a, Section8_3.denom]
+      rw [← hA, ← hB]
+    rwa [this]
+  rw [hW_comm]
+  field_simp [hU1, hW1, hU, hU_frac_ne, h_denom_sub_ne, h_num_diff_ne, h_inner]
+  ring
+
+/-!  23.6 Phase Average Equivalence -/
+
+/--
+THE MASTER PHASE AVERAGE EQUIVALENCE THEOREM (D_q2_eq_D_low_general):
+Equates the continuous phase average D(q₂) for arbitrary m to D_low^{(m)}(U, W):
+  D(q₂) = m(1 - B) - (d₀(m, A) * B) / (A * (L - 1)) = D_low^{(m)}(U, W).
+-/
+theorem D_q2_eq_D_low_general (m : ℕ) (U W A B : ℝ)
+    (hA : A = U / (1 + U))
+    (hB : B = W / (1 + W))
+    (hU1 : 1 + U ≠ 0)
+    (hW1 : 1 + W ≠ 0)
+    (hU : U ≠ 0)
+    (hA_ne : A ≠ 0)
+    (h_denom_L : Section8_3.denom m A B ≠ 0)
+    (h_Lm1 : Section8_3.L_general m A B - 1 ≠ 0)
+    (h_denom_UW : (m : ℝ) * (1 - ((m : ℝ) - 1) * U) * W - U ≠ 0) :
+    (m : ℝ) * (1 - B) - (d0 m A * B) / (A * (Section8_3.L_general m A B - 1)) =
+    D_low m U W := by
+  rw [d0_B_div_A_Lm1_eq_defect_bound m U W A B hA hB hU1 hW1 hU hA_ne h_denom_L h_Lm1 h_denom_UW]
+  rw [D_low_def m U W hU hW1 h_denom_UW]
+  rw [hB]
+  have h_one_sub_B : 1 - W / (1 + W) = 1 / (1 + W) := by
+    field_simp [hW1]
+    ring
+  rw [h_one_sub_B]
+  ring
+
+end GeneralParameterBridge
