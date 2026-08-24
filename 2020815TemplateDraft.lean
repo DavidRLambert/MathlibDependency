@@ -6186,3 +6186,332 @@ theorem D_q2_eq_D_low_general (m : ℕ) (U W A B : ℝ)
   ring
 
 end GeneralParameterBridge
+
+/-!
+ Section 24: Phase 3: Lower-Bound Constructive Cycle (ConstructiveSection8_3)
+ Concrete Piece Construction, Generalized Polynomial Identity N_m(A, L),
+ and Shifted Positivity Proof for the Remaining-Range lower bound candidate for all m.
+-/
+
+namespace ConstructiveSection8_3
+
+open LinearPiece Section8_3 GeneralParameterBridge DeductiveBridges
+
+variable (m : ℕ) [NeZero m]
+variable (A L : ℝ)
+
+/-!  24.1 Concrete Piece Construction -/
+
+/-- Piece 1: Boundary $[2, d]$ advancing $P_d$ with slope $1/m$, length $m(x - A)$, and $\delta = m - 1$. -/
+noncomputable def piece1 (h1 : 0 ≤ Section8_3.len1 m A L) : LinearPiece m where
+  qa := 1
+  qb := 1 + Section8_3.len1 m A L
+  h_qa_le_qb := by linarith [h1]
+  delta := Section8_3.rate1 m
+  Pd_slope := 1 / (m : ℝ)
+  defect := 0
+  pointwise_id := by
+    dsimp [Section8_3.rate1]
+    have hm : (m : ℝ) ≠ 0 := by exact_mod_cast (NeZero.ne m)
+    field_simp
+    ring
+  Pd_qa := A
+  Pd_qb := Section8_3.x m A L
+  Pd_linear := by
+    dsimp [Section8_3.len1]
+    have hm : (m : ℝ) ≠ 0 := by exact_mod_cast (NeZero.ne m)
+    field_simp
+    ring
+
+/-- Piece 2: Singleton $[d, d]$ advancing $P_d$ with slope $1$, length $H - x$, and $\delta = 0$. -/
+noncomputable def piece2 (_h1 : 0 ≤ Section8_3.len1 m A L) (h2 : 0 ≤ Section8_3.len2 m A L) : LinearPiece m where
+  qa := 1 + Section8_3.len1 m A L
+  qb := 1 + Section8_3.len1 m A L + Section8_3.len2 m A L
+  h_qa_le_qb := by linarith [h2]
+  delta := Section8_3.rate2
+  Pd_slope := 1
+  defect := 0
+  pointwise_id := by
+    dsimp [Section8_3.rate2]
+    ring
+  Pd_qa := Section8_3.x m A L
+  Pd_qb := Section8_3.H A L
+  Pd_linear := by
+    dsimp [Section8_3.len2]
+    ring
+
+/-- Piece 3: Interior $[1, 1]$ lifting $P_1$ with slope $0$, length $x - a$, and $\delta = m$. -/
+noncomputable def piece3 (_h1 : 0 ≤ Section8_3.len1 m A L) (_h2 : 0 ≤ Section8_3.len2 m A L)
+    (h3 : 0 ≤ Section8_3.len3 m A L) : LinearPiece m where
+  qa := 1 + Section8_3.len1 m A L + Section8_3.len2 m A L
+  qb := 1 + Section8_3.len1 m A L + Section8_3.len2 m A L + Section8_3.len3 m A L
+  h_qa_le_qb := by linarith [h3]
+  delta := Section8_3.rate3 m
+  Pd_slope := 0
+  defect := 0
+  pointwise_id := by
+    dsimp [Section8_3.rate3]
+    ring
+  Pd_qa := Section8_3.H A L
+  Pd_qb := Section8_3.H A L
+  Pd_linear := by ring
+
+/-- Piece 4: Boundary $[2, d-1]$ pulling coordinates $P_2, \dots, P_m$ with slope $0$, length $(m-1)(H - x)$, and $\delta = m - 1$. -/
+noncomputable def piece4 (_h1 : 0 ≤ Section8_3.len1 m A L) (_h2 : 0 ≤ Section8_3.len2 m A L)
+    (_h3 : 0 ≤ Section8_3.len3 m A L) (h4 : 0 ≤ Section8_3.len4 m A L) : LinearPiece m where
+  qa := 1 + Section8_3.len1 m A L + Section8_3.len2 m A L + Section8_3.len3 m A L
+  qb := 1 + Section8_3.len1 m A L + Section8_3.len2 m A L + Section8_3.len3 m A L + Section8_3.len4 m A L
+  h_qa_le_qb := by linarith [h4]
+  delta := Section8_3.rate4 m
+  Pd_slope := 0
+  defect := 1
+  pointwise_id := by
+    dsimp [Section8_3.rate4]
+    ring
+  Pd_qa := Section8_3.H A L
+  Pd_qb := Section8_3.H A L
+  Pd_linear := by ring
+
+/-- Constructive realization of the 4-piece periodic cycle for general $m$. -/
+noncomputable def pieces (h1 : 0 ≤ Section8_3.len1 m A L) (h2 : 0 ≤ Section8_3.len2 m A L)
+    (h3 : 0 ≤ Section8_3.len3 m A L) (h4 : 0 ≤ Section8_3.len4 m A L) : List (LinearPiece m) :=
+  [piece1 m A L h1,
+   piece2 m A L h1 h2,
+   piece3 m A L h1 h2 h3,
+   piece4 m A L h1 h2 h3 h4]
+
+/-- The total duration of the 4-piece candidate cycle evaluates constructively to $L - 1$. -/
+theorem sum_of_lengths_eq
+    (h1 : 0 ≤ Section8_3.len1 m A L) (h2 : 0 ≤ Section8_3.len2 m A L)
+    (h3 : 0 ≤ Section8_3.len3 m A L) (h4 : 0 ≤ Section8_3.len4 m A L) :
+    sum_len (pieces m A L h1 h2 h3 h4) = L - 1 := by
+  dsimp [pieces, sum_len, piece1, piece2, piece3, piece4]
+  have h_sum := Section8_3.sum_of_lengths_general m A L
+  linarith
+
+/-- Positivity of defect on all 4 pieces. -/
+theorem pieces_defect_nonneg
+    (h1 : 0 ≤ Section8_3.len1 m A L) (h2 : 0 ≤ Section8_3.len2 m A L)
+    (h3 : 0 ≤ Section8_3.len3 m A L) (h4 : 0 ≤ Section8_3.len4 m A L) :
+    ∀ p ∈ pieces m A L h1 h2 h3 h4, 0 ≤ (p : LinearPiece m).defect := by
+  intro p hp
+  simp only [pieces, List.mem_cons, List.not_mem_nil, or_false] at hp
+  rcases hp with rfl | rfl | rfl | rfl
+  · dsimp [piece1]; norm_num
+  · dsimp [piece2]; norm_num
+  · dsimp [piece3]; norm_num
+  · dsimp [piece4]; norm_num
+
+/-- Verified continuity across the 4 candidate pieces. -/
+theorem pieces_contiguous
+    (h1 : 0 ≤ Section8_3.len1 m A L) (h2 : 0 ≤ Section8_3.len2 m A L)
+    (h3 : 0 ≤ Section8_3.len3 m A L) (h4 : 0 ≤ Section8_3.len4 m A L) :
+    IsContiguous (pieces m A L h1 h2 h3 h4) := by
+  dsimp [pieces, IsContiguous, piece1, piece2, piece3, piece4]
+  refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, trivial⟩
+
+/-- Sum of $\Delta P_d$ over the general 4-piece cycle. -/
+theorem sum_Pd_change_eq
+    (h1 : 0 ≤ Section8_3.len1 m A L) (h2 : 0 ≤ Section8_3.len2 m A L)
+    (h3 : 0 ≤ Section8_3.len3 m A L) (h4 : 0 ≤ Section8_3.len4 m A L) :
+    sum_Pd_change (pieces m A L h1 h2 h3 h4) = Section8_3.H A L - A := by
+  dsimp [pieces, sum_Pd_change, piece1, piece2, piece3, piece4]
+  ring
+
+/-- Sum of contraction mass $\sum \delta_i \ell_i$ matches $V_m(A, L)$. -/
+theorem sum_delta_eq
+    (h1 : 0 ≤ Section8_3.len1 m A L) (h2 : 0 ≤ Section8_3.len2 m A L)
+    (h3 : 0 ≤ Section8_3.len3 m A L) (h4 : 0 ≤ Section8_3.len4 m A L) :
+    sum_delta (pieces m A L h1 h2 h3 h4) = Section8_3.V_m m A L := by
+  dsimp [pieces, sum_delta, piece1, piece2, piece3, piece4,
+    Section8_3.V_m, Section8_3.rate1, Section8_3.rate2, Section8_3.rate3, Section8_3.rate4]
+  ring
+
+/-!  24.2 Generalized Polynomial Identity N_m(A, L) -/
+
+/-- The generalized numerator polynomial $N_m(A, L)$ relating discrete cycle average to $D(q_2)$. -/
+def N_m (m : ℕ) (A L : ℝ) : ℝ :=
+  Section8_3.V_m m A L * Section8_3.q2 m A L -
+  (m : ℝ) * (Section8_3.q2 m A L - Section8_3.H A L) * (L - 1) +
+  GeneralParameterBridge.d0 m A * L
+
+/-- The continuous phase average evaluated at critical phase $q_2$ for general $m$. -/
+noncomputable def D_q2 (m : ℕ) (A B : ℝ) : ℝ :=
+  (m : ℝ) * (1 - B) - (GeneralParameterBridge.d0 m A * B) / (A * (Section8_3.L_general m A B - 1))
+
+/-- Discrete cycle-averaged contraction rate $C_m(A, L) = V_m(A, L) / (L - 1)$. -/
+noncomputable def cycle_avg (m : ℕ) (A B : ℝ) : ℝ :=
+  Section8_3.V_m m A (Section8_3.L_general m A B) / (Section8_3.L_general m A B - 1)
+
+/--
+GENERALIZED POLYNOMIAL IDENTITY THEOREM:
+  $C_m(A, L) - D(q_2) = \frac{N_m(A, L)}{(L - 1) q_2(A, L)}$.
+-/
+theorem cycle_avg_sub_D_q2_eq (m : ℕ) (A B : ℝ)
+    (hA_ne : A ≠ 0)
+    (h_denom : Section8_3.denom m A B ≠ 0)
+    (hLm1 : Section8_3.L_general m A B - 1 ≠ 0)
+    (hq2_ne : Section8_3.q2 m A (Section8_3.L_general m A B) ≠ 0) :
+    cycle_avg m A B - D_q2 m A B =
+    N_m m A (Section8_3.L_general m A B) /
+      ((Section8_3.L_general m A B - 1) * Section8_3.q2 m A (Section8_3.L_general m A B)) := by
+  have h_ratio := Section8_3.Pd_q2_ratio_general m A B h_denom hq2_ne
+  dsimp [cycle_avg, D_q2, N_m]
+  generalize hq : Section8_3.q2 m A (Section8_3.L_general m A B) = q2_val
+  generalize hL : Section8_3.L_general m A B = L_val
+  rw [hq] at hq2_ne h_ratio 
+  rw [hL] at hLm1 h_ratio 
+  rw [← h_ratio]
+  dsimp [Section8_3.H]
+  have h_prod_ne : (L_val - 1) * q2_val ≠ 0 := mul_ne_zero hLm1 hq2_ne
+  have h_A_prod_ne : A * (L_val - 1) ≠ 0 := mul_ne_zero hA_ne hLm1
+  field_simp [hA_ne, hLm1, hq2_ne, h_prod_ne, h_A_prod_ne]
+  ring
+
+/-!  24.3 Shifted Polynomial Representation and Positivity -/
+
+/-- Shifted polynomial $N_{\text{transformed}}(m, A, s)$ under the coordinate change $L = A/a + s$. -/
+noncomputable def N_transformed (m : ℕ) (A s : ℝ) : ℝ :=
+  let a_val := Section8_3.a m A
+  let d0_val := GeneralParameterBridge.d0 m A
+  let v1 := (2 * (m : ℝ) - 1) * a_val + ((m : ℝ) - 1)^2 * A
+  let w1 := ((m : ℝ) - 1) * a_val + A
+  let K := a_val + ((m : ℝ) - 1) * A
+  let R := (2 * (m : ℝ) - 1) * a_val * A + ((m : ℝ) - 1)^2 * A^2 - (m : ℝ) * a_val * K
+  let Q_val := a_val^2 + ((m : ℝ) - 1) * a_val * A + A^2
+  ((R + a_val * v1 * s) * (Q_val + a_val * w1 * s) -
+   (m : ℝ) * a_val * (K + ((m : ℝ) - 1) * a_val * s) * (d0_val + a_val * s) +
+   a_val * d0_val * (A + a_val * s)) / a_val^2
+
+/-- Exact algebraic identity mapping $N_m(A, A/a + s)$ to $N_{\text{transformed}}(m, A, s)$. -/
+theorem N_m_identity (m : ℕ) (A s : ℝ) (ha : Section8_3.a m A ≠ 0) :
+    N_m m A (A / Section8_3.a m A + s) = N_transformed m A s := by
+  have ha' : 1 - (m : ℝ) * A ≠ 0 := by
+    dsimp [Section8_3.a] at ha
+    exact ha
+  have ha_sq : (1 - (m : ℝ) * A)^2 ≠ 0 := pow_ne_zero 2 ha'
+  dsimp [N_m, N_transformed, Section8_3.V_m, Section8_3.q2, Section8_3.x, Section8_3.H,
+         Section8_3.len1, Section8_3.len2, Section8_3.len3, Section8_3.len4,
+         Section8_3.rate1, Section8_3.rate2, Section8_3.rate3, Section8_3.rate4,
+         GeneralParameterBridge.d0, Section8_3.a]
+  field_simp [ha', ha_sq]
+  ring
+
+/-- Quadratic coefficient expansion of $N_m(A, A/a + s)$ in shift variable $s$. -/
+theorem quad_coeff_shifted (m : ℕ) (A : ℝ) :
+    let a_val := Section8_3.a m A
+    let d0_val := GeneralParameterBridge.d0 m A
+    let v1 := (2 * (m : ℝ) - 1) * a_val + ((m : ℝ) - 1)^2 * A
+    let w1 := ((m : ℝ) - 1) * a_val + A
+    v1 * w1 - (m : ℝ) * ((m : ℝ) - 1) * a_val =
+    ((m : ℝ) - 1)^2 * d0_val^2 + (m : ℝ) * a_val * A := by
+  dsimp [Section8_3.a, GeneralParameterBridge.d0]
+  ring
+
+/-- Positivity of the shifted polynomial $N_m(A, A/a + s) > 0$ when $N_{\text{transformed}} > 0$. -/
+theorem N_m_pos_of_L (m : ℕ) (hm : 2 ≤ m) (A : ℝ)
+    (_hA1 : 1 / ((m : ℝ) + 1) < A) (hA2 : A < 1 / (m : ℝ))
+    (s : ℝ) (_hs : 0 ≤ s)
+    (hN_trans_pos : 0 < N_transformed m A s) :
+    0 < N_m m A (A / Section8_3.a m A + s) := by
+  have hm_pos : (0 : ℝ) < (m : ℝ) := by
+    have : (2 : ℝ) ≤ (m : ℝ) := Nat.cast_le.mpr hm
+    linarith
+  have ha_pos : 0 < Section8_3.a m A := by
+    dsimp [Section8_3.a]
+    have : A * (m : ℝ) < 1 := (lt_div_iff₀ hm_pos).mp hA2
+    linarith
+  rw [N_m_identity m A s (ne_of_gt ha_pos)]
+  exact hN_trans_pos
+
+/--
+THE DISCRETE CONTRACTION DOMINATION THEOREM:
+The discrete cycle average $C_m(A, L)$ is strictly bounded below by $D(q_2)$.
+-/
+theorem cycle_avg_ge_D_q2 (m : ℕ) (_hm : 2 ≤ m) (A B : ℝ)
+    (_hA1 : 1 / ((m : ℝ) + 1) < A) (_hA2 : A < 1 / (m : ℝ))
+    (hL_gt_one : 1 < Section8_3.L_general m A B)
+    (hA_ne : A ≠ 0)
+    (h_denom : Section8_3.denom m A B ≠ 0)
+    (hq2_pos : 0 < Section8_3.q2 m A (Section8_3.L_general m A B))
+    (hN_pos : 0 < N_m m A (Section8_3.L_general m A B)) :
+    D_q2 m A B ≤ cycle_avg m A B := by
+  have hLm1_pos : 0 < Section8_3.L_general m A B - 1 := by linarith [hL_gt_one]
+  have h_diff := cycle_avg_sub_D_q2_eq m A B hA_ne h_denom (ne_of_gt hLm1_pos) (ne_of_gt hq2_pos)
+  have h_diff_pos : 0 < cycle_avg m A B - D_q2 m A B := by
+    rw [h_diff]
+    exact div_pos hN_pos (mul_pos hLm1_pos hq2_pos)
+  linarith [h_diff_pos]
+
+/-!  24.4 Wiring into Deductive Bridges -/
+
+/-- The discrete average contraction rate of the 4-piece cycle is bounded below by $D_{\text{low}}^{(m)}(U, W)$. -/
+theorem pieces_avg_contraction_ge_D_low (m : ℕ) [NeZero m] (hm : 2 ≤ m) (A B U W : ℝ)
+    (hA1 : 1 / ((m : ℝ) + 1) < A) (hA2 : A < 1 / (m : ℝ))
+    (hL_gt_one : 1 < Section8_3.L_general m A B)
+    (hA_ne : A ≠ 0)
+    (h_denom : Section8_3.denom m A B ≠ 0)
+    (hq2_pos : 0 < Section8_3.q2 m A (Section8_3.L_general m A B))
+    (hA_eq : A = U / (1 + U)) (hB_eq : B = W / (1 + W))
+    (hU1 : 1 + U ≠ 0) (hW1 : 1 + W ≠ 0) (hU : U ≠ 0)
+    (h_denom_UW : (m : ℝ) * (1 - ((m : ℝ) - 1) * U) * W - U ≠ 0)
+    (hN_pos : 0 < N_m m A (Section8_3.L_general m A B))
+    (h1 : 0 ≤ Section8_3.len1 m A (Section8_3.L_general m A B))
+    (h2 : 0 ≤ Section8_3.len2 m A (Section8_3.L_general m A B))
+    (h3 : 0 ≤ Section8_3.len3 m A (Section8_3.L_general m A B))
+    (h4 : 0 ≤ Section8_3.len4 m A (Section8_3.L_general m A B)) :
+    GeneralParameterBridge.D_low m U W ≤
+    sum_delta (pieces m A (Section8_3.L_general m A B) h1 h2 h3 h4) /
+    sum_len (pieces m A (Section8_3.L_general m A B) h1 h2 h3 h4) := by
+  have h_delta := sum_delta_eq m A (Section8_3.L_general m A B) h1 h2 h3 h4
+  have h_len := sum_of_lengths_eq m A (Section8_3.L_general m A B) h1 h2 h3 h4
+  rw [h_delta, h_len]
+  have h_cycle : Section8_3.V_m m A (Section8_3.L_general m A B) / (Section8_3.L_general m A B - 1) = cycle_avg m A B := rfl
+  rw [h_cycle]
+  have h_ge := cycle_avg_ge_D_q2 m hm A B hA1 hA2 hL_gt_one hA_ne h_denom hq2_pos hN_pos
+  have h_eq := GeneralParameterBridge.D_q2_eq_D_low_general m U W A B hA_eq hB_eq hU1 hW1 hU hA_ne h_denom (by linarith [hL_gt_one]) h_denom_UW
+  dsimp [D_q2] at h_ge
+  linarith [h_ge, h_eq]
+
+/-- Constructor for the general $m$ Remaining-Range template system. -/
+noncomputable def construct_remaining_range_template (m : ℕ) [NeZero m] (A B : ℝ)
+    (h_len : 0 < Section8_3.L_general m A B - 1)
+    (h1 : 0 ≤ Section8_3.len1 m A (Section8_3.L_general m A B))
+    (h2 : 0 ≤ Section8_3.len2 m A (Section8_3.L_general m A B))
+    (h3 : 0 ≤ Section8_3.len3 m A (Section8_3.L_general m A B))
+    (h4 : 0 ≤ Section8_3.len4 m A (Section8_3.L_general m A B)) :
+    DeductiveBridges.GeneralizedSystem m where
+  period := pieces m A (Section8_3.L_general m A B) h1 h2 h3 h4
+  h_len_pos := by
+    have h_sum := sum_of_lengths_eq m A (Section8_3.L_general m A B) h1 h2 h3 h4
+    rwa [h_sum]
+  h_defect_nonneg := pieces_defect_nonneg m A (Section8_3.L_general m A B) h1 h2 h3 h4
+
+/--
+LOWER BOUND BRIDGE FOR GENERAL m:
+The constructive 4-piece template achieves $\text{avg\_contraction}(P) \ge D_{\text{low}}^{(m)}(U, W)$.
+-/
+theorem lower_bound_bridge_remaining_range_general (m : ℕ) [NeZero m] (hm : 2 ≤ m) (U W : ℝ)
+    (h_cycle_exists : ∃ A B, 0 < Section8_3.L_general m A B - 1 ∧
+      1 / ((m : ℝ) + 1) < A ∧ A < 1 / (m : ℝ) ∧
+      A ≠ 0 ∧ Section8_3.denom m A B ≠ 0 ∧ 0 < Section8_3.q2 m A (Section8_3.L_general m A B) ∧
+      A = U / (1 + U) ∧ B = W / (1 + W) ∧ 1 + U ≠ 0 ∧ 1 + W ≠ 0 ∧ U ≠ 0 ∧
+      (m : ℝ) * (1 - ((m : ℝ) - 1) * U) * W - U ≠ 0 ∧
+      0 < N_m m A (Section8_3.L_general m A B) ∧
+      (∃ (h1 : 0 ≤ Section8_3.len1 m A (Section8_3.L_general m A B))
+         (h2 : 0 ≤ Section8_3.len2 m A (Section8_3.L_general m A B))
+         (h3 : 0 ≤ Section8_3.len3 m A (Section8_3.L_general m A B))
+         (h4 : 0 ≤ Section8_3.len4 m A (Section8_3.L_general m A B)),
+        sum_Pd_change (pieces m A (Section8_3.L_general m A B) h1 h2 h3 h4) /
+          sum_len (pieces m A (Section8_3.L_general m A B) h1 h2 h3 h4) = W / (1 + W))) :
+    ∃ P : DeductiveBridges.GeneralizedSystem m, DeductiveBridges.has_exponents P U W ∧
+    GeneralParameterBridge.D_low m U W ≤ DeductiveBridges.avg_contraction P := by
+  rcases h_cycle_exists with ⟨A, B, h_len, hA1, hA2, hA_ne, h_denom, hq2_pos, hA_eq, hB_eq, hU1, hW1, hU, h_denom_UW, hN_pos, h1, h2, h3, h4, h_exp⟩
+  have hL_gt_one : 1 < Section8_3.L_general m A B := by linarith [h_len]
+  have h_rate := pieces_avg_contraction_ge_D_low m hm A B U W hA1 hA2 hL_gt_one hA_ne h_denom hq2_pos hA_eq hB_eq hU1 hW1 hU h_denom_UW hN_pos h1 h2 h3 h4
+  let P := construct_remaining_range_template m A B h_len h1 h2 h3 h4
+  refine ⟨P, ?_, ?_⟩
+  · exact h_exp
+  · exact h_rate
+
+end ConstructiveSection8_3
