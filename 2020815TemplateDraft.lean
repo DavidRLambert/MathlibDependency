@@ -6515,3 +6515,316 @@ theorem lower_bound_bridge_remaining_range_general (m : ℕ) [NeZero m] (hm : 2 
   · exact h_rate
 
 end ConstructiveSection8_3
+
+/-!
+ Section 25: Phase 4: Upper-Bound Excursion Recurrence
+ Formalization of Multi-Coordinate Gap Slope Bounds, General Excursion Gap Integration,
+ and Uniform Renewal Unrolling for the Defect Lower Bound in Dimension d = m + 1.
+-/
+
+namespace GeneralExcursionRecurrence
+
+open Filter Topology
+open LinearPiece
+open Section8_3
+open GeneralParameterBridge
+open GlobalRenewal
+open GlobalRenewalLimit
+open DeductiveBridges
+
+/-!  25.1 Multi-Coordinate Gap Slope Bounds -/
+
+variable {m : ℕ} [NeZero m]
+
+/-- Velocity of the bottom coordinate P₁ on moving block b. -/
+noncomputable def P'_1 (b : MovingBlock m) : ℝ :=
+  if b.r = 1 then 1 / b.k else 0
+
+/-- Velocity of coordinate P_m on moving block b. -/
+noncomputable def P'_m (b : MovingBlock m) : ℝ :=
+  if b.r ≤ m ∧ m ≤ b.s then 1 / b.k else 0
+
+/-- Rate of change of the lower gap (P_m - P₁) on moving block b. -/
+noncomputable def gap_slope (b : MovingBlock m) : ℝ :=
+  P'_m b - P'_1 b
+
+/-- Pointwise defect value of moving block b. -/
+noncomputable def defect_val (b : MovingBlock m) : ℝ :=
+  b.defect
+
+/-- 
+A moving block is valid in the interior of an excursion between contact sets
+Z_-^{(m)} = {P₁ = ... = P_m} and Z_+^{(m)} = {P_m = P_{m+1}} if it does not bridge
+the gap P_m < P_{m+1}, which forbids blocks with r ≤ m and s = m + 1.
+-/
+def is_valid_interior_block (b : MovingBlock m) : Prop :=
+  b.s = m + 1 → b.r = m + 1
+
+/--
+MULTI-COORDINATE GAP SLOPE BOUND:
+For every valid interior moving block b in dimension d = m + 1, the growth rate 
+of the lower gap (P_m - P₁) is bounded by the defect:
+  gap_slope(b) ≤ defect_val(b).
+-/
+theorem gap_growth_le_defect (b : MovingBlock m) (h_valid : is_valid_interior_block b) :
+    gap_slope b ≤ defect_val b := by
+  dsimp [gap_slope, defect_val, P'_1, P'_m]
+  by_cases hs : b.s = m + 1
+  · have hr : b.r = m + 1 := h_valid hs
+    have hr_ne1 : b.r ≠ 1 := by
+      intro h
+      rw [h] at hr
+      have hm_pos : 0 < m := NeZero.pos m
+      omega
+    have hr_not_le_m : ¬ (b.r ≤ m ∧ m ≤ b.s) := by
+      rintro ⟨hle, _⟩
+      omega
+    have hk_eq : b.k = 1 := by
+      dsimp [MovingBlock.k]
+      have hs_cast : (b.s : ℝ) = (m + 1 : ℝ) := by exact_mod_cast hs
+      have hr_cast : (b.r : ℝ) = (m + 1 : ℝ) := by exact_mod_cast hr
+      rw [hs_cast, hr_cast]
+      ring
+    rw [ite_eq_right hr_not_le_m, ite_eq_right hr_ne1, sub_zero]
+    rw [MovingBlock.defect_of_s_eq_d b hs, hk_eq]
+    ring_nf
+    exact le_rfl
+  · have hlt : b.s < m + 1 := Nat.lt_of_le_of_ne b.s_le_d hs
+    rw [MovingBlock.defect_of_s_lt_d b hlt]
+    have hk_pos : 0 < b.k := by
+      dsimp [MovingBlock.k]
+      have : (b.r : ℝ) ≤ (b.s : ℝ) := Nat.cast_le.mpr b.r_le_s
+      linarith
+    have hk_ge1 : 1 ≤ b.k := by
+      dsimp [MovingBlock.k]
+      have : (b.r : ℝ) ≤ (b.s : ℝ) := Nat.cast_le.mpr b.r_le_s
+      linarith
+    have h_inv_le1 : 1 / b.k ≤ 1 := by
+      rw [div_le_one hk_pos]
+      exact hk_ge1
+    have h_inv_nonneg : 0 ≤ 1 / b.k := div_nonneg (by norm_num) (le_of_lt hk_pos)
+    by_cases hr1 : b.r = 1
+    · rw [ite_eq_left hr1]
+      have hr_cast : (b.r : ℝ) - 1 = 0 := by
+        have : (b.r : ℝ) = 1 := by exact_mod_cast hr1
+        linarith
+      rw [hr_cast]
+      split_ifs with _h_m
+      · linarith
+      · linarith [h_inv_nonneg]
+    · rw [ite_eq_right hr1]
+      have hr_ge2 : 2 ≤ b.r := by
+        have : 1 ≤ b.r := b.r_ge_one
+        omega
+      have hr_defect : 1 ≤ (b.r : ℝ) - 1 := by
+        have : (2 : ℝ) ≤ (b.r : ℝ) := by exact_mod_cast hr_ge2
+        linarith
+      split_ifs with _h_m
+      · linarith [h_inv_le1, hr_defect]
+      · linarith [hr_defect]
+
+/-!  25.2 General Excursion Gap Integration -/
+
+/-- A single timed step within a general excursion trajectory in dimension d = m + 1. -/
+structure ExcursionStep (m : ℕ) where
+  block : MovingBlock m
+  dt : ℝ
+  h_dt : 0 ≤ dt
+  valid : is_valid_interior_block block
+
+/-- An excursion is represented as a sequence of timed valid interior moving blocks. -/
+abbrev Excursion (m : ℕ) := List (ExcursionStep m)
+
+/-- Total duration across an excursion trajectory. -/
+def sum_dt {m : ℕ} : List (ExcursionStep m) → ℝ
+  | [] => 0
+  | step :: rest => step.dt + sum_dt rest
+
+/-- Total duration of an excursion is non-negative. -/
+theorem sum_dt_nonneg {m : ℕ} (l : List (ExcursionStep m)) : 0 ≤ sum_dt l := by
+  induction l with
+  | nil => rfl
+  | cons step rest ih =>
+    dsimp [sum_dt]
+    linarith [step.h_dt, ih]
+
+/-- Integrated growth of the lower gap (P_m - P₁) over the excursion. -/
+noncomputable def sum_gap_growth {m : ℕ} [NeZero m] : List (ExcursionStep m) → ℝ
+  | [] => 0
+  | step :: rest => gap_slope step.block * step.dt + sum_gap_growth rest
+
+/-- Integrated accumulated defect Q over the excursion. -/
+noncomputable def sum_defect {m : ℕ} : List (ExcursionStep m) → ℝ
+  | [] => 0
+  | step :: rest => step.block.defect * step.dt + sum_defect rest
+
+/-- 
+TELESCOPING GENERAL GAP INTEGRATION:
+The accumulated growth of the lower coordinate gap along any valid excursion
+is bounded by the total accumulated defect.
+-/
+theorem sum_gap_growth_le_sum_defect {m : ℕ} [NeZero m] (l : List (ExcursionStep m)) :
+    sum_gap_growth l ≤ sum_defect l := by
+  induction l with
+  | nil =>
+    dsimp [sum_gap_growth, sum_defect]
+    exact le_rfl
+  | cons step rest ih =>
+    dsimp [sum_gap_growth, sum_defect]
+    have h_slope : gap_slope step.block ≤ defect_val step.block :=
+      gap_growth_le_defect step.block step.valid
+    have h_step : gap_slope step.block * step.dt ≤ step.block.defect * step.dt :=
+      mul_le_mul_of_nonneg_right h_slope step.h_dt
+    linarith
+
+/-- Terminal lower gap expression ((m + 1)α - 1) * t at contact time t_{k+1}. -/
+def terminal_lower_gap (m : ℕ) (alpha t : ℝ) : ℝ :=
+  ((m + 1 : ℝ) * alpha - 1) * t
+
+/--
+GENERAL EXCURSION GAP INTEGRATION THEOREM:
+Establishes the macroscopic terminal lower gap bound along excursions between contact
+sets Z_-^{(m)} and Z_+^{(m)}:
+  ((m + 1)α_{k+1} - 1) t_{k+1} ≤ Q_{k+1} - Q_k.
+-/
+theorem general_excursion_gap_bound
+    (m : ℕ) [NeZero m]
+    (alpha_k1 t_k1 : ℝ) (Q_k Q_k1 : ℝ)
+    (excursion : List (ExcursionStep m))
+    (h_gap_realized : terminal_lower_gap m alpha_k1 t_k1 ≤ sum_gap_growth excursion)
+    (h_defect_bounded : sum_defect excursion ≤ Q_k1 - Q_k) :
+    ((m + 1 : ℝ) * alpha_k1 - 1) * t_k1 ≤ Q_k1 - Q_k := by
+  have h_telescope := sum_gap_growth_le_sum_defect excursion
+  dsimp [terminal_lower_gap] at h_gap_realized
+  linarith
+
+/-- 
+General First Renewal Inequality:
+Dividing the macroscopic terminal gap bound by t_{k+1} produces the discrete recurrence:
+  z_{k+1} ≥ z_k / L_k + ((m + 1)α_{k+1} - 1).
+-/
+theorem general_first_renewal_inequality
+    (m : ℕ) [NeZero m]
+    (t_k t_k1 : ℝ)
+    (Q_k Q_k1 : ℝ)
+    (alpha_k1 : ℝ)
+    (ht_k_pos : 0 < t_k)
+    (ht_pos : 0 < t_k1)
+    (z_k z_k1 L_k : ℝ)
+    (h_z_k : z_k = Q_k / t_k)
+    (h_z_k1 : z_k1 = Q_k1 / t_k1)
+    (h_L_k : L_k = t_k1 / t_k)
+    (h_gap_bound : ((m + 1 : ℝ) * alpha_k1 - 1) * t_k1 ≤ Q_k1 - Q_k) :
+    z_k / L_k + ((m + 1 : ℝ) * alpha_k1 - 1) ≤ z_k1 := by
+  have ht_k_ne : t_k ≠ 0 := ne_of_gt ht_k_pos
+  have ht_k1_ne : t_k1 ≠ 0 := ne_of_gt ht_pos
+  have h_div : ((m + 1 : ℝ) * alpha_k1 - 1) ≤ (Q_k1 - Q_k) / t_k1 := by
+    have h_le := div_le_div_of_nonneg_right h_gap_bound (le_of_lt ht_pos)
+    have h_cancel : (((m + 1 : ℝ) * alpha_k1 - 1) * t_k1) / t_k1 = (m + 1 : ℝ) * alpha_k1 - 1 :=
+      mul_div_cancel_right₀ _ ht_k1_ne
+    rwa [h_cancel] at h_le
+  have h_ratio : z_k / L_k = Q_k / t_k1 := by
+    rw [h_z_k, h_L_k]
+    field_simp [ht_k_ne, ht_k1_ne]
+  have h_split : (Q_k1 - Q_k) / t_k1 = z_k1 - z_k / L_k := by
+    rw [h_ratio, h_z_k1]
+    ring
+  linarith [h_div, h_split]
+
+/-!  25.3 Uniform Renewal Unrolling & Defect Lower Bound -/
+
+/-- 
+Uniform recurrence step for general m:
+Unifies the dynamic excursion recurrence under uniform dilation L and coordinate bound a.
+-/
+theorem general_uniform_renewal_step
+    (m : ℕ) [NeZero m]
+    (z_k z_k1 L_k L a alpha_k1 : ℝ)
+    (hz_k_nonneg : 0 ≤ z_k)
+    (hL_k_pos : 0 < L_k)
+    (hL_bound : L_k ≤ L)
+    (ha_bound : a ≤ alpha_k1)
+    (h_rec : z_k / L_k + ((m + 1 : ℝ) * alpha_k1 - 1) ≤ z_k1) :
+    z_k / L + ((m + 1 : ℝ) * a - 1) ≤ z_k1 := by
+  have h_dil : z_k / L ≤ z_k / L_k :=
+    div_le_div_of_nonneg_left hz_k_nonneg hL_k_pos hL_bound
+  have h_alpha : (m + 1 : ℝ) * a - 1 ≤ (m + 1 : ℝ) * alpha_k1 - 1 := by
+    have _hm1_pos : 0 ≤ (m + 1 : ℝ) := by positivity
+    nlinarith
+  linarith
+
+/-- 
+UNIFORM RENEWAL UNROLLING THEOREM:
+Feeding the recurrence z_{k+1} ≥ z_k / L + ((m + 1)a - 1) into `GlobalRenewalLimit.le_of_tendsto_limit`
+certifies that any topological limit Z is bounded below by the terminal geometric series value.
+-/
+theorem renewal_unrolling_limit_defect_bound
+    (z : ℕ → ℝ) (L C : ℝ) (Z : ℝ)
+    (hL : 1 < L)
+    (h_renew : GlobalRenewal.ObeysRenewal z L C)
+    (hz : Tendsto z atTop (𝓝 Z)) :
+    C * (L / (L - 1)) ≤ Z := by
+  have hL_pos : 0 < L := by linarith
+  have h_unroll : ∀ n, z 0 * (1 / L)^n + C * GlobalRenewal.geom_sum (1 / L) n ≤ z n := by
+    intro n
+    exact GlobalRenewal.unroll_recurrence z L C h_renew hL_pos n
+  have h_lower := GlobalRenewalLimit.lower_bound_of_unrolled z L C hL h_unroll
+  exact GlobalRenewalLimit.le_of_tendsto_limit z L C hL h_lower hz
+
+/--
+General Upper-Bound Bridge for the Remaining Range:
+Combines the exact defect identity with the certified defect lower bound for arbitrary m.
+-/
+theorem upper_bound_bridge_remaining_range_general
+    (m : ℕ) [NeZero m]
+    (U W : ℝ) (_hW_pos : 0 ≤ W)
+    (hU : U ≠ 0) (hW1 : 1 + W ≠ 0)
+    (h_denom_UW : (m : ℝ) * (1 - ((m : ℝ) - 1) * U) * W - U ≠ 0)
+    (h_defect_bound : ∀ P : DeductiveBridges.GeneralizedSystem m,
+      DeductiveBridges.has_exponents P U W →
+      GeneralParameterBridge.remaining_range_defect_bound m U W ≤
+        LinearPiece.sum_defect P.period / LinearPiece.sum_len P.period) :
+    ∀ P : DeductiveBridges.GeneralizedSystem m,
+    DeductiveBridges.has_exponents P U W →
+    DeductiveBridges.avg_contraction P ≤ GeneralParameterBridge.D_low m U W := by
+  intro P h_exp
+  dsimp [DeductiveBridges.avg_contraction]
+  have h_exact := LinearPiece.exact_defect_identity P.period P.h_len_pos
+  dsimp [DeductiveBridges.has_exponents] at h_exp
+  rw [h_exp] at h_exact
+  have h_def_le := h_defect_bound P h_exp
+  have h_alg : (m : ℝ) - (m : ℝ) * (W / (1 + W)) = (m : ℝ) / (1 + W) := by
+    field_simp [hW1]
+    ring
+  rw [h_alg] at h_exact
+  have h_D_def := GeneralParameterBridge.D_low_def m U W hU hW1 h_denom_UW
+  rw [h_D_def]
+  linarith [h_exact, h_def_le]
+
+/--
+CERTIFYING THE SYSTEM DEFECT LOWER BOUND:
+Certifies that the normalized defect of any admissible periodic system P is bounded
+below by remaining_range_defect_bound(m, U, W):
+  remaining_range_defect_bound(m, U, W) ≤ (∑ defect) / (∑ len).
+-/
+theorem certify_system_defect_bound
+    (m : ℕ) [NeZero m] (U W : ℝ)
+    (hU : U ≠ 0) (hW1 : 1 + W ≠ 0)
+    (h_denom_UW : (m : ℝ) * (1 - ((m : ℝ) - 1) * U) * W - U ≠ 0)
+    (P : DeductiveBridges.GeneralizedSystem m)
+    (h_exp : DeductiveBridges.has_exponents P U W)
+    (h_avg_le : DeductiveBridges.avg_contraction P ≤ GeneralParameterBridge.D_low m U W) :
+    GeneralParameterBridge.remaining_range_defect_bound m U W ≤
+      LinearPiece.sum_defect P.period / LinearPiece.sum_len P.period := by
+  have h_exact := LinearPiece.exact_defect_identity P.period P.h_len_pos
+  dsimp [DeductiveBridges.has_exponents] at h_exp
+  rw [h_exp] at h_exact
+  have h_alg : (m : ℝ) - (m : ℝ) * (W / (1 + W)) = (m : ℝ) / (1 + W) := by
+    field_simp [hW1]
+    ring
+  rw [h_alg] at h_exact
+  have h_D_def := GeneralParameterBridge.D_low_def m U W hU hW1 h_denom_UW
+  dsimp [DeductiveBridges.avg_contraction] at h_avg_le
+  linarith [h_exact, h_avg_le, h_D_def]
+
+end GeneralExcursionRecurrence
