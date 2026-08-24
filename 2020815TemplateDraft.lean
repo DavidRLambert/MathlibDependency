@@ -6008,13 +6008,13 @@ theorem denom_factor_pos_on_admissible_domain
 
 /-!  22.6 Compatibility with m = 2 and Deductive Bridges -/
 
-/-- For $m = 2$, $B_{\min}^{(2)}(A)$ matches `Section5.B_min`[cite: 1]. -/
+/-- For $m = 2$, $B_{\min}^{(2)}(A)$ matches `Section5.B_min`. -/
 theorem B_min_two_eq (A : ℝ) : B_min 2 A = Section5.B_min A := by
   dsimp [B_min, Q, a, Section5.B_min]
   have : (1 - 2 * A)^2 + (2 - 1 : ℝ) * (1 - 2 * A) * A + A^2 = 1 - 3 * A + 3 * A^2 := by ring
   rw [this]
 
-/-- For $m = 2$, $B_*^{(2)}(A)$ matches `Section5.B_star`[cite: 1]. -/
+/-- For $m = 2$, $B_*^{(2)}(A)$ matches `Section5.B_star`. -/
 theorem B_star_two_eq (A : ℝ) : B_star 2 A = Section5.B_star A := by
   dsimp [B_star, denom_star, a, Section5.B_star]
   have : A + (2 - 1 : ℝ) * (1 - 2 * A) = 1 - A := by ring
@@ -6025,7 +6025,7 @@ theorem denom_factor_two_eq (U W : ℝ) : denom_factor 2 U W = 2 * (1 - U) * W -
   dsimp [denom_factor]
   ring
 
-/-- Integration bridge to Section 21: denominator non-degeneracy for `TransitionLimit.D_low_m`[cite: 1]. -/
+/-- Integration bridge to Section 21: denominator non-degeneracy for `TransitionLimit.D_low_m`. -/
 theorem denom_factor_ne_zero_on_admissible_domain
     (hm : 1 < m)
     (hA1 : 1 / (m + 1) < A)
@@ -6186,6 +6186,16 @@ theorem D_q2_eq_D_low_general (m : ℕ) (U W A B : ℝ)
   ring
 
 end GeneralParameterBridge
+
+/-!
+ Global Typeclass Bridges for Dimension Parameters
+-/
+
+instance (priority := 1000) fact_neZero_of_three_le (m : ℕ) [h : Fact (3 ≤ m)] : NeZero m :=
+  ⟨by have := h.out; omega⟩
+
+instance (priority := 1000) fact_neZero_of_two_le (m : ℕ) [h : Fact (2 ≤ m)] : NeZero m :=
+  ⟨by have := h.out; omega⟩
 
 /-!
  Section 24: Phase 3: Lower-Bound Constructive Cycle (ConstructiveSection8_3)
@@ -6428,7 +6438,7 @@ theorem N_m_pos_of_L (m : ℕ) (hm : 2 ≤ m) (A : ℝ)
 THE DISCRETE CONTRACTION DOMINATION THEOREM:
 The discrete cycle average $C_m(A, L)$ is strictly bounded below by $D(q_2)$.
 -/
-theorem cycle_avg_ge_D_q2 (m : ℕ) (_hm : 2 ≤ m) (A B : ℝ)
+theorem cycle_avg_ge_D_q2 (m : ℕ) [NeZero m] (_hm : 2 ≤ m) (A B : ℝ)
     (_hA1 : 1 / ((m : ℝ) + 1) < A) (_hA2 : A < 1 / (m : ℝ))
     (hL_gt_one : 1 < Section8_3.L_general m A B)
     (hA_ne : A ≠ 0)
@@ -6516,6 +6526,10 @@ theorem lower_bound_bridge_remaining_range_general (m : ℕ) [NeZero m] (hm : 2 
 
 end ConstructiveSection8_3
 
+namespace DeductiveBridges
+export ConstructiveSection8_3 (lower_bound_bridge_remaining_range_general)
+end DeductiveBridges
+
 /-!
  Section 25: Phase 4: Upper-Bound Excursion Recurrence
  Formalization of Multi-Coordinate Gap Slope Bounds, General Excursion Gap Integration,
@@ -6532,9 +6546,9 @@ open GlobalRenewal
 open GlobalRenewalLimit
 open DeductiveBridges
 
-/-!  25.1 Multi-Coordinate Gap Slope Bounds -/
-
 variable {m : ℕ} [NeZero m]
+
+/-!  25.1 Multi-Coordinate Gap Slope Bounds -/
 
 /-- Velocity of the bottom coordinate P₁ on moving block b. -/
 noncomputable def P'_1 (b : MovingBlock m) : ℝ :=
@@ -6566,6 +6580,7 @@ For every valid interior moving block b in dimension d = m + 1, the growth rate
 of the lower gap (P_m - P₁) is bounded by the defect:
   gap_slope(b) ≤ defect_val(b).
 -/
+
 theorem gap_growth_le_defect (b : MovingBlock m) (h_valid : is_valid_interior_block b) :
     gap_slope b ≤ defect_val b := by
   dsimp [gap_slope, defect_val, P'_1, P'_m]
@@ -6573,8 +6588,7 @@ theorem gap_growth_le_defect (b : MovingBlock m) (h_valid : is_valid_interior_bl
   · have hr : b.r = m + 1 := h_valid hs
     have hr_ne1 : b.r ≠ 1 := by
       intro h
-      rw [h] at hr
-      have hm_pos : 0 < m := NeZero.pos m
+      have hlen := b.block_len_le hs
       omega
     have hr_not_le_m : ¬ (b.r ≤ m ∧ m ≤ b.s) := by
       rintro ⟨hle, _⟩
@@ -6828,3 +6842,47 @@ theorem certify_system_defect_bound
   linarith [h_exact, h_avg_le, h_D_def]
 
 end GeneralExcursionRecurrence
+
+/-!
+ Theorem 1.3: Remaining-Range Dimension Formula for m ≥ 3
+-/
+
+namespace UnifiedTheorems
+
+open LinearPiece
+
+/--
+Theorem 1.3 (Remaining-Range Dimension Formula for all m ≥ 3):
+Combines the general excursion defect bound (upper bound) with the 4-piece cycle (lower bound).
+-/
+theorem theorem_1_3
+    (m : ℕ) [hm : Fact (3 ≤ m)]
+    (U W : ℝ)
+    (hW_pos : 0 ≤ W)
+    (hU : U ≠ 0) (hW1 : 1 + W ≠ 0)
+    (h_denom_UW : (m : ℝ) * (1 - ((m : ℝ) - 1) * U) * W - U ≠ 0)
+    (h_defect_bound : ∀ P : DeductiveBridges.GeneralizedSystem m,
+      DeductiveBridges.has_exponents P U W →
+      GeneralParameterBridge.remaining_range_defect_bound m U W ≤
+        LinearPiece.sum_defect P.period / LinearPiece.sum_len P.period)
+    (h_cycle_exists : ∃ A B, 0 < Section8_3.L_general m A B - 1 ∧
+      1 / ((m : ℝ) + 1) < A ∧ A < 1 / (m : ℝ) ∧
+      A ≠ 0 ∧ Section8_3.denom m A B ≠ 0 ∧ 0 < Section8_3.q2 m A (Section8_3.L_general m A B) ∧
+      A = U / (1 + U) ∧ B = W / (1 + W) ∧ 1 + U ≠ 0 ∧ 1 + W ≠ 0 ∧ U ≠ 0 ∧
+      (m : ℝ) * (1 - ((m : ℝ) - 1) * U) * W - U ≠ 0 ∧
+      0 < ConstructiveSection8_3.N_m m A (Section8_3.L_general m A B) ∧
+      (∃ (h1 : 0 ≤ Section8_3.len1 m A (Section8_3.L_general m A B))
+         (h2 : 0 ≤ Section8_3.len2 m A (Section8_3.L_general m A B))
+         (h3 : 0 ≤ Section8_3.len3 m A (Section8_3.L_general m A B))
+         (h4 : 0 ≤ Section8_3.len4 m A (Section8_3.L_general m A B)),
+        LinearPiece.sum_Pd_change (ConstructiveSection8_3.pieces m A (Section8_3.L_general m A B) h1 h2 h3 h4) /
+          LinearPiece.sum_len (ConstructiveSection8_3.pieces m A (Section8_3.L_general m A B) h1 h2 h3 h4) = W / (1 + W))) :
+    DeductiveBridges.dim_H_E m U W = GeneralParameterBridge.D_low m U W := by
+  have hm_ge_2 : 2 ≤ m := by
+    have := hm.out
+    omega
+  have upper := GeneralExcursionRecurrence.upper_bound_bridge_remaining_range_general m U W hW_pos hU hW1 h_denom_UW h_defect_bound
+  have lower := DeductiveBridges.lower_bound_bridge_remaining_range_general m hm_ge_2 U W h_cycle_exists
+  exact DeductiveBridges.dfsu_sandwich m (GeneralParameterBridge.D_low m U W) U W upper lower
+
+end UnifiedTheorems
