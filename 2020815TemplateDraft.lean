@@ -5793,3 +5793,246 @@ theorem D_low_two_at_W_crit_eq_largeW_target
   exact D_low_two_at_W_crit U hU hU1 hW1 h_denom
 
 end TransitionLimit
+
+/-!
+ Section 22: Lower Feasibility Boundary Positivity (W = W_min)
+
+ Formalization of the lower feasibility boundary condition and verification
+ that the denominator factor $m(1 - (m-1)U)W - U$ is strictly positive on the
+ entire admissible domain $B_{\min}^{(m)}(A) < B < B_*^{(m)}(A)$ for all $m > 1$.
+-/
+
+namespace LowerFeasibilityBoundary
+
+variable (m A B U W : ℝ)
+
+/-!  22.1 Parameter Definitions and Coordinate Transformations -/
+
+/-- Base coordinate parameter $a(m, A) = 1 - mA$. -/
+def a (m A : ℝ) : ℝ := 1 - m * A
+
+/-- Quadratic denominator polynomial $Q(m, A) = a^2 + (m - 1)aA + A^2$. -/
+noncomputable def Q (m A : ℝ) : ℝ :=
+  (a m A)^2 + (m - 1) * (a m A) * A + A^2
+
+/-- Denominator of the upper threshold $B_*^{(m)}(A)$: $A + (m - 1)a(m, A)$. -/
+noncomputable def denom_star (m A : ℝ) : ℝ :=
+  A + (m - 1) * a m A
+
+/-- Lower feasibility boundary $B_{\min}^{(m)}(A) = A^2 / Q(m, A)$. -/
+noncomputable def B_min (m A : ℝ) : ℝ :=
+  A^2 / Q m A
+
+/-- Upper threshold boundary $B_*^{(m)}(A) = A / (A + (m - 1)a(m, A))$. -/
+noncomputable def B_star (m A : ℝ) : ℝ :=
+  A / denom_star m A
+
+/-- Coordinate transformation from template space $A$ to Diophantine exponent $U$. -/
+noncomputable def U_of_A (A : ℝ) : ℝ := A / (1 - A)
+
+/-- Coordinate transformation from template space $B$ to Diophantine exponent $W$. -/
+noncomputable def W_of_B (B : ℝ) : ℝ := B / (1 - B)
+
+/-- The target denominator factor $m(1 - (m - 1)U)W - U$. -/
+noncomputable def denom_factor (m U W : ℝ) : ℝ :=
+  m * (1 - (m - 1) * U) * W - U
+
+/-- The denominator factor mapped to template coordinates $(A, B)$: $B(m a + A) - A$. -/
+noncomputable def factor_AB (m A B : ℝ) : ℝ :=
+  B * (m * a m A + A) - A
+
+/-!  22.2 Positivity of Domain Parameters -/
+
+/-- For $A < 1/m$, the parameter $a(m, A) = 1 - mA$ is strictly positive. -/
+theorem a_pos (hm : 0 < m) (hA2 : A < 1 / m) : 0 < a m A := by
+  dsimp [a]
+  have h : A * m < 1 := (lt_div_iff₀ hm).mp hA2
+  nlinarith
+
+/-- For $A > 1/(m + 1)$, the coordinate difference $A - a(m, A) = (m + 1)A - 1$ is strictly positive. -/
+theorem A_sub_a_pos (hm1 : 0 < m + 1) (hA1 : 1 / (m + 1) < A) : 0 < A - a m A := by
+  dsimp [a]
+  have h : 1 < A * (m + 1) := (div_lt_iff₀ hm1).mp hA1
+  nlinarith
+
+/-- Strict positivity of the quadratic polynomial $Q(m, A)$ on the admissible domain. -/
+theorem Q_pos (hm : 1 ≤ m) (ha : 0 < a m A) (hA : 0 < A) : 0 < Q m A := by
+  dsimp [Q]
+  have hm1 : 0 ≤ m - 1 := by linarith
+  have h1 : 0 < (a m A)^2 := sq_pos_of_ne_zero (ne_of_gt ha)
+  have h2 : 0 ≤ (m - 1) * a m A * A := by
+    have h_prod : 0 ≤ (m - 1) * a m A := mul_nonneg hm1 (le_of_lt ha)
+    exact mul_nonneg h_prod (le_of_lt hA)
+  have h3 : 0 < A^2 := sq_pos_of_ne_zero (ne_of_gt hA)
+  linarith
+
+/-- Strict positivity of the denominator of $B_*^{(m)}(A)$. -/
+theorem denom_star_pos (hm : 1 ≤ m) (ha : 0 < a m A) (hA : 0 < A) :
+    0 < denom_star m A := by
+  dsimp [denom_star]
+  have : 0 ≤ (m - 1) * a m A := mul_nonneg (by linarith) (le_of_lt ha)
+  linarith
+
+/-!  22.3 Boundary Comparison: B_min < B_* -/
+
+/-- Cross-multiplication identity comparing $B_{\min}$ and $B_*$. -/
+theorem B_star_sub_B_min_num (m A : ℝ) :
+    Q m A * A - A^2 * denom_star m A = A * (a m A)^2 := by
+  dsimp [Q, denom_star]
+  ring
+
+/-- Strict ordering of the boundaries: $B_{\min}^{(m)}(A) < B_*^{(m)}(A)$ on the entire admissible domain. -/
+theorem B_min_lt_B_star (hm : 1 ≤ m) (hA1 : 1 / (m + 1) < A) (hA2 : A < 1 / m) :
+    B_min m A < B_star m A := by
+  have hm_pos : 0 < m := by linarith
+  have ha := a_pos m A hm_pos hA2
+  have hA : 0 < A := lt_trans (by positivity) hA1
+  have hQ := Q_pos m A hm ha hA
+  have h_den := denom_star_pos m A hm ha hA
+  dsimp [B_min, B_star]
+  rw [div_lt_div_iff₀ hQ h_den]
+  have h_num_pos : 0 < A * (a m A)^2 :=
+    mul_pos hA (sq_pos_of_ne_zero (ne_of_gt ha))
+  have h_diff := B_star_sub_B_min_num m A
+  linarith [h_diff, h_num_pos]
+
+/-!  22.4 Algebraic Reduction to Template Coordinates -/
+
+/-- Factorization connecting $m(1 - (m-1)U)W - U$ to $B(ma + A) - A$. -/
+theorem denom_factor_eq_factor_AB (hA : 1 - A ≠ 0) (hB : 1 - B ≠ 0) :
+    denom_factor m (U_of_A A) (W_of_B B) = factor_AB m A B / ((1 - A) * (1 - B)) := by
+  dsimp [denom_factor, factor_AB, U_of_A, W_of_B, a]
+  field_simp [hA, hB]
+  ring
+
+/-- Exact polynomial identity at the lower feasibility boundary $B = B_{\min}^{(m)}(A)$. -/
+theorem factor_AB_at_B_min_num (m A : ℝ) :
+    A^2 * (m * a m A + A) - A * Q m A = A * a m A * (A - a m A) := by
+  dsimp [Q, a]
+  ring
+
+/-- Evaluation of `factor_AB` at the lower boundary $B = B_{\min}^{(m)}(A)$. -/
+theorem factor_AB_at_B_min (hQ : Q m A ≠ 0) :
+    factor_AB m A (B_min m A) = (A * a m A * (A - a m A)) / Q m A := by
+  dsimp [factor_AB, B_min]
+  have h_num := factor_AB_at_B_min_num m A
+  have h_div : (A^2 / Q m A) * (m * a m A + A) - A =
+      (A^2 * (m * a m A + A) - A * Q m A) / Q m A := by
+    field_simp [hQ]
+  rw [h_div, h_num]
+
+/-- Strict positivity of `factor_AB` at the lower boundary $B = B_{\min}^{(m)}(A)$. -/
+theorem factor_AB_at_B_min_pos (hm : 1 ≤ m) (hA1 : 1 / (m + 1) < A) (hA2 : A < 1 / m) :
+    0 < factor_AB m A (B_min m A) := by
+  have hm_pos : 0 < m := by linarith
+  have hm1_pos : 0 < m + 1 := by linarith
+  have ha := a_pos m A hm_pos hA2
+  have h_diff := A_sub_a_pos m A hm1_pos hA1
+  have hA : 0 < A := lt_trans (by positivity) hA1
+  have hQ := Q_pos m A hm ha hA
+  rw [factor_AB_at_B_min m A (ne_of_gt hQ)]
+  have h_num_pos : 0 < A * a m A * (A - a m A) :=
+    mul_pos (mul_pos hA ha) h_diff
+  exact div_pos h_num_pos hQ
+
+/-- Positivity of the linear coefficient $ma + A > 0$. -/
+theorem coeff_B_pos (hm : 0 < m) (ha : 0 < a m A) (hA : 0 < A) :
+    0 < m * a m A + A := by
+  have : 0 < m * a m A := mul_pos hm ha
+  linarith
+
+/-- Monotonicity: `factor_AB` is strictly positive for all $B \ge B_{\min}^{(m)}(A)$. -/
+theorem factor_AB_pos_of_B_ge (hm : 1 ≤ m) (hA1 : 1 / (m + 1) < A) (hA2 : A < 1 / m)
+    (hB : B_min m A ≤ B) :
+    0 < factor_AB m A B := by
+  have h_at_min := factor_AB_at_B_min_pos m A hm hA1 hA2
+  have hm_pos : 0 < m := by linarith
+  have ha := a_pos m A hm_pos hA2
+  have hA : 0 < A := lt_trans (by positivity) hA1
+  have h_coeff := coeff_B_pos m A hm_pos ha hA
+  have h_monotone : factor_AB m A (B_min m A) ≤ factor_AB m A B := by
+    dsimp [factor_AB]
+    have : B_min m A * (m * a m A + A) ≤ B * (m * a m A + A) :=
+      mul_le_mul_of_nonneg_right hB (le_of_lt h_coeff)
+    linarith
+  exact lt_of_lt_of_le h_at_min h_monotone
+
+/-!  22.5 Global Positivity on the Admissible Domain -/
+
+/-- Upper bound $B_*^{(m)}(A) < 1$ for all $m > 1$. -/
+theorem B_star_lt_one (hm : 1 < m) (ha : 0 < a m A) (hA : 0 < A) :
+    B_star m A < 1 := by
+  dsimp [B_star]
+  have h_den := denom_star_pos m A (by linarith) ha hA
+  rw [div_lt_one h_den]
+  dsimp [denom_star]
+  have : 0 < (m - 1) * a m A := mul_pos (by linarith) ha
+  linarith
+
+/-- For all $B < B_*^{(m)}(A)$, the factor $1 - B$ is strictly positive. -/
+theorem one_sub_B_pos (hm : 1 < m) (ha : 0 < a m A) (hA : 0 < A)
+    (hB : B < B_star m A) :
+    0 < 1 - B := by
+  have h_star_lt_1 := B_star_lt_one m A hm ha hA
+  have : B < 1 := lt_trans hB h_star_lt_1
+  linarith
+
+/--
+MASTER THEOREM (Lower Feasibility Boundary Denominator Positivity):
+The denominator factor $m(1 - (m-1)U)W - U$ is strictly positive on the entire
+admissible domain $B_{\min}^{(m)}(A) < B < B_*^{(m)}(A)$ for all $m > 1$.
+-/
+theorem denom_factor_pos_on_admissible_domain
+    (hm : 1 < m)
+    (hA1 : 1 / (m + 1) < A)
+    (hA2 : A < 1 / m)
+    (hB_low : B_min m A < B)
+    (hB_high : B < B_star m A) :
+    0 < denom_factor m (U_of_A A) (W_of_B B) := by
+  have hm_ge1 : 1 ≤ m := le_of_lt hm
+  have hm_pos : 0 < m := by linarith
+  have ha := a_pos m A hm_pos hA2
+  have hA : 0 < A := lt_trans (by positivity) hA1
+  have hA_lt1 : A < 1 := by
+    have h_inv : 1 / m ≤ 1 := by
+      rw [div_le_one hm_pos]
+      linarith
+    exact lt_of_lt_of_le hA2 h_inv
+  have h1_sub_A : 0 < 1 - A := by linarith
+  have h1_sub_B : 0 < 1 - B := one_sub_B_pos m A B hm ha hA hB_high
+  have h_denom_pos : 0 < (1 - A) * (1 - B) := mul_pos h1_sub_A h1_sub_B
+  have h_factor_pos : 0 < factor_AB m A B :=
+    factor_AB_pos_of_B_ge m A B hm_ge1 hA1 hA2 (le_of_lt hB_low)
+  rw [denom_factor_eq_factor_AB m A B (ne_of_gt h1_sub_A) (ne_of_gt h1_sub_B)]
+  exact div_pos h_factor_pos h_denom_pos
+
+/-!  22.6 Compatibility with m = 2 and Deductive Bridges -/
+
+/-- For $m = 2$, $B_{\min}^{(2)}(A)$ matches `Section5.B_min`[cite: 1]. -/
+theorem B_min_two_eq (A : ℝ) : B_min 2 A = Section5.B_min A := by
+  dsimp [B_min, Q, a, Section5.B_min]
+  have : (1 - 2 * A)^2 + (2 - 1 : ℝ) * (1 - 2 * A) * A + A^2 = 1 - 3 * A + 3 * A^2 := by ring
+  rw [this]
+
+/-- For $m = 2$, $B_*^{(2)}(A)$ matches `Section5.B_star`[cite: 1]. -/
+theorem B_star_two_eq (A : ℝ) : B_star 2 A = Section5.B_star A := by
+  dsimp [B_star, denom_star, a, Section5.B_star]
+  have : A + (2 - 1 : ℝ) * (1 - 2 * A) = 1 - A := by ring
+  rw [this]
+
+/-- For $m = 2$, the denominator factor matches $2(1 - U)W - U$. -/
+theorem denom_factor_two_eq (U W : ℝ) : denom_factor 2 U W = 2 * (1 - U) * W - U := by
+  dsimp [denom_factor]
+  ring
+
+/-- Integration bridge to Section 21: denominator non-degeneracy for `TransitionLimit.D_low_m`[cite: 1]. -/
+theorem denom_factor_ne_zero_on_admissible_domain
+    (hm : 1 < m)
+    (hA1 : 1 / (m + 1) < A)
+    (hA2 : A < 1 / m)
+    (hB_low : B_min m A < B)
+    (hB_high : B < B_star m A) :
+    denom_factor m (U_of_A A) (W_of_B B) ≠ 0 :=
+  ne_of_gt (denom_factor_pos_on_admissible_domain m A B hm hA1 hA2 hB_low hB_high)
+
+end LowerFeasibilityBoundary
