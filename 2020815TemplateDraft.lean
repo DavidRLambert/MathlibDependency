@@ -6959,3 +6959,264 @@ theorem theorem_1_3_spectrum (m : ℕ) [hm : Fact (3 ≤ m)] (U W : ℝ)
     exact theorem_1_3 m U W hW_pos hU hW1 h_denom_UW h_defect_bound h_cycle_exists
 
 end UnifiedTheorems
+
+/-!
+ Section 27: Polynomial Bifurcation and Critical Thresholds (PolynomialBifurcation)
+ Formalization of the sign analysis of the quadratic polynomial N_m(A, L) in the shift parameter s = L - A/a,
+ computing the exact bifurcation root s_crit(m, A), and proving the domain decomposition into the 5-piece and 4-piece regimes[cite: 1].
+-/
+
+namespace PolynomialBifurcation
+
+open Section8_3 GeneralParameterBridge ConstructiveSection8_3
+
+variable (m : ℕ)
+variable (A s U : ℝ)
+
+/-!  27.1 Intermediate Algebraic Blocks -/
+
+/-- Linear parameter v₁ = (2m - 1)a + (m - 1)²A. -/
+noncomputable def v1 (m : ℕ) (A : ℝ) : ℝ :=
+  (2 * (m : ℝ) - 1) * Section8_3.a m A + ((m : ℝ) - 1)^2 * A
+
+/-- Linear parameter w₁ = (m - 1)a + A. -/
+noncomputable def w1 (m : ℕ) (A : ℝ) : ℝ :=
+  ((m : ℝ) - 1) * Section8_3.a m A + A
+
+/-- Intermediate parameter K = a + (m - 1)A. -/
+noncomputable def K (m : ℕ) (A : ℝ) : ℝ :=
+  Section8_3.a m A + ((m : ℝ) - 1) * A
+
+/-- Intermediate parameter R = (2m - 1)aA + (m - 1)²A² - maK. -/
+noncomputable def R (m : ℕ) (A : ℝ) : ℝ :=
+  (2 * (m : ℝ) - 1) * Section8_3.a m A * A + ((m : ℝ) - 1)^2 * A^2 - (m : ℝ) * Section8_3.a m A * K m A
+
+/-- Quadratic parameter Q = a² + (m - 1)aA + A². -/
+noncomputable def Q (m : ℕ) (A : ℝ) : ℝ :=
+  (Section8_3.a m A)^2 + ((m : ℝ) - 1) * Section8_3.a m A * A + A^2
+
+/-!  27.2 Definitions and Coefficient Expansions -/
+
+/-- Leading quadratic coefficient c₂ = (m - 1)²d₀² + maA[cite: 1]. -/
+noncomputable def c2 (m : ℕ) (A : ℝ) : ℝ :=
+  ((m : ℝ) - 1)^2 * (GeneralParameterBridge.d0 m A)^2 + (m : ℝ) * (Section8_3.a m A) * A
+
+/-- Linear coefficient c₁ from the Taylor expansion of N_m(A, A/a + s)[cite: 1]. -/
+noncomputable def c1 (m : ℕ) (A : ℝ) : ℝ :=
+  (R m A * w1 m A + Q m A * v1 m A -
+   (m : ℝ) * Section8_3.a m A * (K m A + ((m : ℝ) - 1) * GeneralParameterBridge.d0 m A) +
+   Section8_3.a m A * GeneralParameterBridge.d0 m A) / Section8_3.a m A
+
+/-- Constant term c₀ = (RQ - maKd₀ + ad₀A) / a²[cite: 1]. -/
+noncomputable def c0 (m : ℕ) (A : ℝ) : ℝ :=
+  (R m A * Q m A - (m : ℝ) * Section8_3.a m A * K m A * GeneralParameterBridge.d0 m A +
+   Section8_3.a m A * GeneralParameterBridge.d0 m A * A) / (Section8_3.a m A)^2
+
+/-- Discriminant of the quadratic polynomial N_m(s): Δ = c₁² - 4c₂c₀[cite: 1]. -/
+noncomputable def disc (m : ℕ) (A : ℝ) : ℝ :=
+  c1 m A ^ 2 - 4 * c2 m A * c0 m A
+
+/-- Largest real root s_crit(m, A) = (-c₁ + √Δ) / (2c₂)[cite: 1]. -/
+noncomputable def s_crit (m : ℕ) (A : ℝ) : ℝ :=
+  (-c1 m A + Real.sqrt (disc m A)) / (2 * c2 m A)
+
+/-- Critical period length L_crit = A/a + s_crit[cite: 1]. -/
+noncomputable def L_crit (m : ℕ) (A : ℝ) : ℝ :=
+  A / Section8_3.a m A + s_crit m A
+
+/-- Mapping from period length L to auxiliary exponent B. -/
+noncomputable def B_of_L (m : ℕ) (A L : ℝ) : ℝ :=
+  (L * A) / (Section8_3.a m A + L * (A + ((m : ℝ) - 1) * Section8_3.a m A))
+
+/-- Critical auxiliary parameter mapped from L_crit = A/a + s_crit[cite: 1]. -/
+noncomputable def B_crit (m : ℕ) (A : ℝ) : ℝ :=
+  B_of_L m A (L_crit m A)
+
+/-- Diophantine transition exponent between 5-piece and 4-piece dominance[cite: 1]. -/
+noncomputable def W_crit_intermediate (m : ℕ) (U : ℝ) : ℝ :=
+  B_crit m (U / (1 + U)) / (1 - B_crit m (U / (1 + U)))
+
+/-!  27.3 Coefficient Properties & Quadratic Reduction -/
+
+/-- Strict positivity of the leading quadratic coefficient c₂ on the admissible domain. -/
+theorem c2_pos (m : ℕ) (hm : 1 ≤ m) (A : ℝ) (ha : 0 < Section8_3.a m A) (hA : 0 < A) :
+    0 < c2 m A := by
+  dsimp [c2]
+  have hm_pos : 0 < (m : ℝ) := by
+    have : 1 ≤ (m : ℝ) := by exact_mod_cast hm
+    linarith
+  have h_prod : 0 < (m : ℝ) * Section8_3.a m A * A :=
+    mul_pos (mul_pos hm_pos ha) hA
+  have h_sq : 0 ≤ ((m : ℝ) - 1)^2 * (GeneralParameterBridge.d0 m A)^2 := by positivity
+  linarith
+
+/-- Exact equivalence between N_transformed and the canonical quadratic polynomial in s. -/
+theorem N_transformed_eq_quadratic (m : ℕ) (A s : ℝ) (ha : Section8_3.a m A ≠ 0) :
+    ConstructiveSection8_3.N_transformed m A s = c2 m A * s^2 + c1 m A * s + c0 m A := by
+  have ha' : 1 - (m : ℝ) * A ≠ 0 := ha
+  dsimp [ConstructiveSection8_3.N_transformed, c2, c1, c0, v1, w1, K, R, Q,
+         Section8_3.a, GeneralParameterBridge.d0]
+  field_simp [ha']
+  ring
+
+/-- Master Taylor Expansion Theorem: N_m(A, A/a + s) = c₂ s² + c₁ s + c₀. -/
+theorem N_m_quadratic_expansion (m : ℕ) (A s : ℝ) (ha : Section8_3.a m A ≠ 0) :
+    ConstructiveSection8_3.N_m m A (A / Section8_3.a m A + s) =
+    c2 m A * s^2 + c1 m A * s + c0 m A := by
+  rw [ConstructiveSection8_3.N_m_identity m A s ha]
+  exact N_transformed_eq_quadratic m A s ha
+
+/-!  27.4 Bifurcation Root Properties -/
+
+/-- Exact vanishing of any generic quadratic at its larger real root. -/
+theorem quadratic_root_eq_zero (a b c : ℝ) (ha : a ≠ 0) (hdisc : 0 ≤ b^2 - 4 * a * c) :
+    a * ((-b + Real.sqrt (b^2 - 4 * a * c)) / (2 * a))^2 +
+    b * ((-b + Real.sqrt (b^2 - 4 * a * c)) / (2 * a)) + c = 0 := by
+  set d := Real.sqrt (b^2 - 4 * a * c)
+  have hd_sq : d^2 = b^2 - 4 * a * c := Real.sq_sqrt hdisc
+  have ha2 : 2 * a ≠ 0 := mul_ne_zero two_ne_zero ha
+  have ha4 : 4 * a^2 ≠ 0 := by
+    have : 0 < a^2 := sq_pos_of_ne_zero ha
+    linarith
+  have h_frac : a * ((-b + d) / (2 * a))^2 + b * ((-b + d) / (2 * a)) + c =
+      (a * (b^2 - 2 * b * d + d^2) - 2 * a * b * (b - d) + 4 * a^2 * c) / (4 * a^2) := by
+    field_simp [ha2, ha4]
+    ring
+  rw [h_frac, hd_sq]
+  have h_num : a * (b^2 - 2 * b * d + (b^2 - 4 * a * c)) - 2 * a * b * (b - d) + 4 * a^2 * c = 0 := by ring
+  rw [h_num, zero_div]
+
+/-- The quadratic expansion evaluates to exactly 0 at s_crit. -/
+theorem quadratic_eval_at_s_crit (m : ℕ) (A : ℝ) (hc2 : c2 m A ≠ 0) (hdisc : 0 ≤ disc m A) :
+    c2 m A * (s_crit m A)^2 + c1 m A * (s_crit m A) + c0 m A = 0 := by
+  dsimp [s_crit, disc]
+  exact quadratic_root_eq_zero (c2 m A) (c1 m A) (c0 m A) hc2 hdisc
+
+/-- The polynomial N_m evaluates to 0 at the critical bifurcation shift s_crit. -/
+theorem N_m_at_s_crit (m : ℕ) (A : ℝ) (ha : Section8_3.a m A ≠ 0) (hc2 : c2 m A ≠ 0) (hdisc : 0 ≤ disc m A) :
+    ConstructiveSection8_3.N_m m A (A / Section8_3.a m A + s_crit m A) = 0 := by
+  rw [N_m_quadratic_expansion m A (s_crit m A) ha]
+  exact quadratic_eval_at_s_crit m A hc2 hdisc
+
+/-!  27.5 Domain Decomposition & Sign Analysis -/
+
+/-- Factorization of a quadratic polynomial into linear root factors. -/
+theorem quadratic_factorization (a b c s : ℝ) (ha : a ≠ 0) (hdisc : 0 ≤ b^2 - 4 * a * c) :
+    a * s^2 + b * s + c =
+    a * (s - (-b + Real.sqrt (b^2 - 4 * a * c)) / (2 * a)) *
+        (s - (-b - Real.sqrt (b^2 - 4 * a * c)) / (2 * a)) := by
+  set d := Real.sqrt (b^2 - 4 * a * c)
+  have hd_sq : d^2 = b^2 - 4 * a * c := Real.sq_sqrt hdisc
+  have ha2 : 2 * a ≠ 0 := mul_ne_zero two_ne_zero ha
+  have ha4 : 4 * a^2 ≠ 0 := by
+    have : 0 < a^2 := sq_pos_of_ne_zero ha
+    linarith
+  have h_alg : (s - (-b + d) / (2 * a)) * (s - (-b - d) / (2 * a)) =
+      (4 * a^2 * s^2 + 4 * a * b * s + (b^2 - d^2)) / (4 * a^2) := by
+    field_simp [ha2, ha4]
+    ring
+  rw [mul_assoc]
+  rw [h_alg]
+  rw [hd_sq]
+  have h_num : 4 * a^2 * s^2 + 4 * a * b * s + (b^2 - (b^2 - 4 * a * c)) =
+      4 * a * (a * s^2 + b * s + c) := by ring
+  rw [h_num]
+  have h_cancel : a * (4 * a * (a * s^2 + b * s + c) / (4 * a^2)) = a * s^2 + b * s + c := by
+    field_simp [ha, ha4]
+  exact h_cancel.symm
+
+/-- Ordering between the two quadratic roots when Δ ≥ 0 and c₂ > 0. -/
+theorem s_crit_ge_s_other (m : ℕ) (A : ℝ) (hc2 : 0 < c2 m A) (_hdisc : 0 ≤ disc m A) :
+    (-c1 m A - Real.sqrt (disc m A)) / (2 * c2 m A) ≤ s_crit m A := by
+  dsimp [s_crit]
+  have h_den : 0 < 2 * c2 m A := by linarith
+  rw [div_le_div_iff₀ h_den h_den]
+  have h_sqrt : 0 ≤ Real.sqrt (disc m A) := Real.sqrt_nonneg _
+  nlinarith
+
+/-- Strict positivity of the quadratic polynomial for s > s_crit. -/
+theorem quadratic_pos_of_gt_s_crit (m : ℕ) (A s : ℝ) (hc2 : 0 < c2 m A) (hdisc : 0 ≤ disc m A)
+    (hs : s_crit m A < s) :
+    0 < c2 m A * s^2 + c1 m A * s + c0 m A := by
+  have hc2_ne : c2 m A ≠ 0 := ne_of_gt hc2
+  rw [quadratic_factorization (c2 m A) (c1 m A) (c0 m A) s hc2_ne hdisc]
+  have h1 : 0 < s - (-c1 m A + Real.sqrt (disc m A)) / (2 * c2 m A) := by
+    dsimp [s_crit] at hs
+    linarith
+  have h2_le := s_crit_ge_s_other m A hc2 hdisc
+  have h2 : 0 < s - (-c1 m A - Real.sqrt (disc m A)) / (2 * c2 m A) := by
+    linarith
+  have h_prod : 0 < (s - (-c1 m A + Real.sqrt (disc m A)) / (2 * c2 m A)) *
+                    (s - (-c1 m A - Real.sqrt (disc m A)) / (2 * c2 m A)) := mul_pos h1 h2
+  rw [mul_assoc]
+  exact mul_pos hc2 h_prod
+
+/-- Strict positivity of N_m(A, A/a + s) for s > s_crit. -/
+theorem N_m_pos_of_gt_s_crit (m : ℕ) (A s : ℝ) (ha : Section8_3.a m A ≠ 0)
+    (hc2 : 0 < c2 m A) (hdisc : 0 ≤ disc m A) (hs : s_crit m A < s) :
+    0 < ConstructiveSection8_3.N_m m A (A / Section8_3.a m A + s) := by
+  rw [N_m_quadratic_expansion m A s ha]
+  exact quadratic_pos_of_gt_s_crit m A s hc2 hdisc hs
+
+/-- Non-positivity of the quadratic polynomial on the interval between the two real roots. -/
+theorem quadratic_nonpos_of_between_roots (m : ℕ) (A s : ℝ) (hc2 : 0 < c2 m A) (hdisc : 0 ≤ disc m A)
+    (hs_low : (-c1 m A - Real.sqrt (disc m A)) / (2 * c2 m A) ≤ s)
+    (hs_high : s ≤ s_crit m A) :
+    c2 m A * s^2 + c1 m A * s + c0 m A ≤ 0 := by
+  have hc2_ne : c2 m A ≠ 0 := ne_of_gt hc2
+  rw [quadratic_factorization (c2 m A) (c1 m A) (c0 m A) s hc2_ne hdisc]
+  dsimp [s_crit] at hs_high
+  have h1 : s - (-c1 m A + Real.sqrt (disc m A)) / (2 * c2 m A) ≤ 0 := by linarith [hs_high]
+  have h2 : 0 ≤ s - (-c1 m A - Real.sqrt (disc m A)) / (2 * c2 m A) := by linarith [hs_low]
+  have h_prod : (s - (-c1 m A + Real.sqrt (disc m A)) / (2 * c2 m A)) *
+                (s - (-c1 m A - Real.sqrt (disc m A)) / (2 * c2 m A)) ≤ 0 :=
+    mul_nonpos_of_nonpos_of_nonneg h1 h2
+  have hc2_pos : 0 ≤ c2 m A := le_of_lt hc2
+  rw [mul_assoc]
+  exact mul_nonpos_of_nonneg_of_nonpos hc2_pos h_prod
+
+/-- Domain decomposition theorem characterizing the bifurcation boundary at s = s_crit[cite: 1]. -/
+theorem domain_decomposition (m : ℕ) (A s : ℝ) (ha : Section8_3.a m A ≠ 0)
+    (hc2 : 0 < c2 m A) (hdisc : 0 ≤ disc m A) :
+    (s_crit m A < s → 0 < ConstructiveSection8_3.N_m m A (A / Section8_3.a m A + s)) ∧
+    (s = s_crit m A → ConstructiveSection8_3.N_m m A (A / Section8_3.a m A + s) = 0) := by
+  constructor
+  · intro hs
+    exact N_m_pos_of_gt_s_crit m A s ha hc2 hdisc hs
+  · intro hs
+    rw [hs]
+    exact N_m_at_s_crit m A ha (ne_of_gt hc2) hdisc
+
+/-!  27.6 Specialization and Compatibility with m = 2 -/
+
+/-- For m = 2, c₂ matches the leading coefficient 5A² - 4A + 1 from Section 6. -/
+theorem c2_two_eq (A : ℝ) : c2 2 A = 5 * A^2 - 4 * A + 1 := by
+  dsimp [c2, GeneralParameterBridge.d0, Section8_3.a]
+  ring
+
+/-- For m = 2, c₁ matches the linear coefficient from Section 6. -/
+theorem c1_two_eq (A : ℝ) (_hc : Section6.c A ≠ 0) :
+    c1 2 A = (2 * A * (1 - A) * (3 * A - 1)) / Section6.c A := by
+  dsimp [c1, v1, w1, K, R, Q, GeneralParameterBridge.d0, Section8_3.a, Section6.c]
+  field_simp
+  ring
+
+/-- For m = 2, c₀ matches the constant term from Section 6. -/
+theorem c0_two_eq (A : ℝ) (hc : Section6.c A ≠ 0) :
+    c0 2 A = (A * (2 - 3 * A) * (3 * A - 1)^2) / (Section6.c A)^2 := by
+  have hc_sq : (Section6.c A)^2 ≠ 0 := pow_ne_zero 2 hc
+  dsimp [c0, K, R, Q, GeneralParameterBridge.d0, Section8_3.a, Section6.c]
+  field_simp [hc, hc_sq]
+  ring
+
+/-- Compatibility of N_transformed for m = 2 with Section 6. -/
+theorem N_transformed_two_eq (A s : ℝ) (hc : Section6.c A ≠ 0) :
+    ConstructiveSection8_3.N_transformed 2 A s = Section6.N_transformed A s := by
+  have ha : Section8_3.a 2 A ≠ 0 := by
+    dsimp [Section8_3.a, Section6.c] at *
+    exact hc
+  rw [N_transformed_eq_quadratic 2 A s ha]
+  dsimp [Section6.N_transformed]
+  rw [c2_two_eq, c1_two_eq A hc, c0_two_eq A hc]
+
+end PolynomialBifurcation
