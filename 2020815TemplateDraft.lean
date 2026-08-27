@@ -7219,4 +7219,20 @@ theorem N_transformed_two_eq (A s : ℝ) (hc : Section6.c A ≠ 0) :
   dsimp [Section6.N_transformed]
   rw [c2_two_eq, c1_two_eq A hc, c0_two_eq A hc]
 
+/-- 
+THEOREM: Guarantees $N_m \ge 0$ and validity of the 4-cycle on $[B_{\text{crit}}, B_*)$ 
+for all $m \ge 3$ when $s \ge s_{\text{crit}}$[cite: 1].
+-/
+theorem Nm_nonneg_of_s_ge_scrit (_hm : 3 ≤ m)
+    (_hA1 : 1 / ((m : ℝ) + 1) < A) (_hA2 : A < 1 / (m : ℝ))
+    (ha : Section8_3.a m A ≠ 0)
+    (hc2 : 0 < c2 m A) (hdisc : 0 ≤ disc m A)
+    (s : ℝ) (hs : s_crit m A ≤ s) :
+    0 ≤ N_m m A (A / Section8_3.a m A + s) := by
+  rcases lt_or_eq_of_le hs with h_gt | h_eq
+  · have h_pos := N_m_pos_of_gt_s_crit m A s ha hc2 hdisc h_gt
+    exact le_of_lt h_pos
+  · rw [← h_eq]
+    rw [N_m_at_s_crit m A ha (ne_of_gt hc2) hdisc]
+
 end PolynomialBifurcation
