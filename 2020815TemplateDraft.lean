@@ -7271,7 +7271,7 @@ def len5 (m : ℕ) (A L : ℝ) : ℝ := ((m : ℝ) - 1) * (L * A - L * a m A)
 /-!  2. Concrete Piece and System Constructors -/
 
 /-- Concrete linear piece 1: $[2, d]$ boundary block. -/
-noncomputable def piece1 (m : ℕ) [NeZero m] (A H x : ℝ) (h1 : 0 ≤ len1 m A x) : LinearPiece m where
+noncomputable def piece1 (m : ℕ) [NeZero m] (A _H x : ℝ) (h1 : 0 ≤ len1 m A x) : LinearPiece m where
   qa := 1
   qb := 1 + len1 m A x
   h_qa_le_qb := by linarith [h1]
@@ -7420,3 +7420,345 @@ axiom cascaded_cycle_avg_ge_D_low (m : ℕ) [NeZero m] (hm : 3 ≤ m) (U W A B x
       sum_len (pieces m A (L_general m A B * A) (L_general m A B) x h1 h2 h3 h4 h5)
 
 end ConstructiveCascadedIntermediate
+
+/-!
+ Section 29: Boundary 3-Piece Template Limit (ConstructiveBoundary3Piece)
+ This section handles the degenerate limit at the Marnat–Moshchevitin feasibility boundary 
+ B = B_min(m, A), where x = A and Piece 1 ([2, d]) vanishes.
+-/
+
+namespace ConstructiveBoundary3Piece
+
+open LinearPiece
+open Section8_3
+open DeductiveBridges
+open GeneralParameterBridge
+open ConstructiveSection8_3
+open LowerFeasibilityBoundary
+open PolynomialBifurcation
+
+variable (m : ℕ) [NeZero m]
+variable (A L : ℝ)
+
+/-!  29.1 Lengths and Definitions of the 3-Piece Boundary Cycle -/
+
+/-- Boundary period length L_boundary = A / a(m, A). -/
+noncomputable def L_boundary (m : ℕ) (A : ℝ) : ℝ :=
+  A / Section8_3.a m A
+
+/-- Piece 1 length: singleton [d, d] block running for duration L * A - A. -/
+def len1_3pc (_m : ℕ) (A L : ℝ) : ℝ :=
+  L * A - A
+
+/-- Piece 2 length: merged interior [1, m] sweep running for duration (A - a) + m(L * a - A). -/
+def len2_3pc (m : ℕ) (A L : ℝ) : ℝ :=
+  (A - Section8_3.a m A) + (m : ℝ) * (L * Section8_3.a m A - A)
+
+/-- Piece 3 length: boundary [2, m] block running for duration (m - 1)(L * A - L * a). -/
+def len3_3pc (m : ℕ) (A L : ℝ) : ℝ :=
+  ((m : ℝ) - 1) * (L * A - L * Section8_3.a m A)
+
+/-!  29.2 Concrete 3-Piece Constructors -/
+
+/-- Piece 1: Singleton [d, d] advancing P_d with slope 1, rate 0, and defect 0. -/
+noncomputable def piece1_3pc (m : ℕ) [NeZero m] (A L : ℝ) (h1 : 0 ≤ len1_3pc m A L) : LinearPiece m where
+  qa := 1
+  qb := 1 + len1_3pc m A L
+  h_qa_le_qb := by linarith [h1]
+  delta := 0
+  Pd_slope := 1
+  defect := 0
+  pointwise_id := by ring
+  Pd_qa := A
+  Pd_qb := L * A
+  Pd_linear := by
+    dsimp [len1_3pc]
+    ring
+
+/-- Piece 2: Interior [1, m] sweep with slope 0, rate m, and defect 0. -/
+noncomputable def piece2_3pc (m : ℕ) [NeZero m] (A L : ℝ) (_h1 : 0 ≤ len1_3pc m A L)
+    (h2 : 0 ≤ len2_3pc m A L) : LinearPiece m where
+  qa := 1 + len1_3pc m A L
+  qb := 1 + len1_3pc m A L + len2_3pc m A L
+  h_qa_le_qb := by linarith [h2]
+  delta := (m : ℝ)
+  Pd_slope := 0
+  defect := 0
+  pointwise_id := by ring
+  Pd_qa := L * A
+  Pd_qb := L * A
+  Pd_linear := by ring
+
+/-- Piece 3: Boundary [2, m] block with slope 0, rate m - 1, and defect 1. -/
+noncomputable def piece3_3pc (m : ℕ) [NeZero m] (A L : ℝ) (_h1 : 0 ≤ len1_3pc m A L)
+    (_h2 : 0 ≤ len2_3pc m A L) (h3 : 0 ≤ len3_3pc m A L) : LinearPiece m where
+  qa := 1 + len1_3pc m A L + len2_3pc m A L
+  qb := 1 + len1_3pc m A L + len2_3pc m A L + len3_3pc m A L
+  h_qa_le_qb := by linarith [h3]
+  delta := (m : ℝ) - 1
+  Pd_slope := 0
+  defect := 1
+  pointwise_id := by ring
+  Pd_qa := L * A
+  Pd_qb := L * A
+  Pd_linear := by ring
+
+/-- The 3-piece cycle consisting of [d, d], [1, m], and [2, m]. -/
+noncomputable def pieces_3pc (m : ℕ) [NeZero m] (A L : ℝ)
+    (h1 : 0 ≤ len1_3pc m A L) (h2 : 0 ≤ len2_3pc m A L) (h3 : 0 ≤ len3_3pc m A L) : List (LinearPiece m) :=
+  [piece1_3pc m A L h1,
+   piece2_3pc m A L h1 h2,
+   piece3_3pc m A L h1 h2 h3]
+
+/-!  29.3 Period Closure and Algebraic Identities -/
+
+/-- Exact period length matches L - 1. -/
+theorem boundary_cycle_closure (m : ℕ) [NeZero m] (A L : ℝ)
+    (h1 : 0 ≤ len1_3pc m A L) (h2 : 0 ≤ len2_3pc m A L) (h3 : 0 ≤ len3_3pc m A L) :
+    sum_len (pieces_3pc m A L h1 h2 h3) = L - 1 := by
+  dsimp [pieces_3pc, sum_len, piece1_3pc, piece2_3pc, piece3_3pc,
+         len1_3pc, len2_3pc, len3_3pc, Section8_3.a]
+  ring
+
+/-- Defect nonnegativity on all 3 pieces. -/
+theorem pieces_3pc_defect_nonneg (m : ℕ) [NeZero m] (A L : ℝ)
+    (h1 : 0 ≤ len1_3pc m A L) (h2 : 0 ≤ len2_3pc m A L) (h3 : 0 ≤ len3_3pc m A L) :
+    ∀ p ∈ pieces_3pc m A L h1 h2 h3, 0 ≤ (p : LinearPiece m).defect := by
+  intro p hp
+  simp only [pieces_3pc, List.mem_cons, List.not_mem_nil, or_false] at hp
+  rcases hp with rfl | rfl | rfl
+  · dsimp [piece1_3pc]; norm_num
+  · dsimp [piece2_3pc]; norm_num
+  · dsimp [piece3_3pc]; norm_num
+
+/-- Continuity across transition points of the 3 pieces. -/
+theorem pieces_3pc_contiguous (m : ℕ) [NeZero m] (A L : ℝ)
+    (h1 : 0 ≤ len1_3pc m A L) (h2 : 0 ≤ len2_3pc m A L) (h3 : 0 ≤ len3_3pc m A L) :
+    IsContiguous (pieces_3pc m A L h1 h2 h3) := by
+  dsimp [pieces_3pc, IsContiguous, piece1_3pc, piece2_3pc, piece3_3pc]
+  refine ⟨rfl, rfl, rfl, rfl, trivial⟩
+
+/-- Sum of Delta P_d matches L * A - A. -/
+theorem pieces_3pc_sum_Pd_change_eq (m : ℕ) [NeZero m] (A L : ℝ)
+    (h1 : 0 ≤ len1_3pc m A L) (h2 : 0 ≤ len2_3pc m A L) (h3 : 0 ≤ len3_3pc m A L) :
+    sum_Pd_change (pieces_3pc m A L h1 h2 h3) = L * A - A := by
+  dsimp [pieces_3pc, sum_Pd_change, piece1_3pc, piece2_3pc, piece3_3pc]
+  ring
+
+/-- Sum of contraction mass delta matches Section8_3.V_m at the feasibility boundary. -/
+theorem boundary_sum_delta_eq (m : ℕ) [NeZero m] (A : ℝ) (ha : 0 < Section8_3.a m A)
+    (h1 : 0 ≤ len1_3pc m A (A / Section8_3.a m A))
+    (h2 : 0 ≤ len2_3pc m A (A / Section8_3.a m A))
+    (h3 : 0 ≤ len3_3pc m A (A / Section8_3.a m A)) :
+    sum_delta (pieces_3pc m A (A / Section8_3.a m A) h1 h2 h3) =
+    Section8_3.V_m m A (A / Section8_3.a m A) := by
+  have ha_ne : Section8_3.a m A ≠ 0 := ne_of_gt ha
+  dsimp [pieces_3pc, sum_delta, piece1_3pc, piece2_3pc, piece3_3pc,
+         len1_3pc, len2_3pc, len3_3pc, Section8_3.V_m, Section8_3.x, Section8_3.H,
+         Section8_3.len1, Section8_3.len2, Section8_3.len3, Section8_3.len4,
+         Section8_3.rate1, Section8_3.rate2, Section8_3.rate3, Section8_3.rate4]
+  field_simp [ha_ne]
+  ring
+
+/-!  29.4 Length Positivity on the Admissible Domain -/
+
+theorem len1_3pc_boundary_nonneg (m : ℕ) (A : ℝ) (hA : 0 < A) (ha : 0 < Section8_3.a m A)
+    (hd0 : 0 ≤ GeneralParameterBridge.d0 m A) :
+    0 ≤ len1_3pc m A (A / Section8_3.a m A) := by
+  dsimp [len1_3pc]
+  have ha_ne : Section8_3.a m A ≠ 0 := ne_of_gt ha
+  have h_eq : (A / Section8_3.a m A) * A - A = (A * GeneralParameterBridge.d0 m A) / Section8_3.a m A := by
+    field_simp [ha_ne]
+    dsimp [GeneralParameterBridge.d0, Section8_3.a]
+    ring
+  rw [h_eq]
+  exact div_nonneg (mul_nonneg (le_of_lt hA) hd0) (le_of_lt ha)
+
+theorem len2_3pc_boundary_nonneg (m : ℕ) (A : ℝ) (ha : 0 < Section8_3.a m A)
+    (hd0 : 0 ≤ GeneralParameterBridge.d0 m A) :
+    0 ≤ len2_3pc m A (A / Section8_3.a m A) := by
+  dsimp [len2_3pc]
+  have ha_ne : Section8_3.a m A ≠ 0 := ne_of_gt ha
+  have h_eq : (A - Section8_3.a m A) + (m : ℝ) * ((A / Section8_3.a m A) * Section8_3.a m A - A) =
+      GeneralParameterBridge.d0 m A := by
+    rw [div_mul_cancel₀ A ha_ne]
+    dsimp [GeneralParameterBridge.d0, Section8_3.a]
+    ring
+  rw [h_eq]
+  exact hd0
+
+theorem len3_3pc_boundary_nonneg (m : ℕ) (hm : 1 ≤ m) (A : ℝ) (hA : 0 < A) (ha : 0 < Section8_3.a m A)
+    (hd0 : 0 ≤ GeneralParameterBridge.d0 m A) :
+    0 ≤ len3_3pc m A (A / Section8_3.a m A) := by
+  dsimp [len3_3pc]
+  have ha_ne : Section8_3.a m A ≠ 0 := ne_of_gt ha
+  have h_eq : ((m : ℝ) - 1) * ((A / Section8_3.a m A) * A - (A / Section8_3.a m A) * Section8_3.a m A) =
+      (((m : ℝ) - 1) * A * GeneralParameterBridge.d0 m A) / Section8_3.a m A := by
+    field_simp [ha_ne]
+    dsimp [GeneralParameterBridge.d0, Section8_3.a]
+    ring
+  rw [h_eq]
+  have hm1 : 0 ≤ (m : ℝ) - 1 := by
+    have h_real : (1 : ℝ) ≤ (m : ℝ) := by exact_mod_cast hm
+    linarith
+  exact div_nonneg (mul_nonneg (mul_nonneg hm1 (le_of_lt hA)) hd0) (le_of_lt ha)
+
+theorem L_boundary_sub_one_pos (m : ℕ) (A : ℝ) (ha : 0 < Section8_3.a m A)
+    (hd0 : 0 < GeneralParameterBridge.d0 m A) :
+    0 < A / Section8_3.a m A - 1 := by
+  have ha_ne : Section8_3.a m A ≠ 0 := ne_of_gt ha
+  have h_eq : A / Section8_3.a m A - 1 = GeneralParameterBridge.d0 m A / Section8_3.a m A := by
+    field_simp [ha_ne]
+    dsimp [GeneralParameterBridge.d0, Section8_3.a]
+    ring
+  rw [h_eq]
+  exact div_pos hd0 ha
+
+/-!  29.5 Construction of the Boundary Generalized System -/
+
+/-- Admissible GeneralizedSystem instantiation at the B = B_min(m, A) boundary limit. -/
+noncomputable def boundary_system (m : ℕ) [NeZero m] (A : ℝ)
+    (h1 : 0 ≤ len1_3pc m A (A / Section8_3.a m A))
+    (h2 : 0 ≤ len2_3pc m A (A / Section8_3.a m A))
+    (h3 : 0 ≤ len3_3pc m A (A / Section8_3.a m A))
+    (h_len : 0 < A / Section8_3.a m A - 1) :
+    GeneralizedSystem m where
+  period := pieces_3pc m A (A / Section8_3.a m A) h1 h2 h3
+  h_len_pos := by
+    have h_sum := boundary_cycle_closure m A (A / Section8_3.a m A) h1 h2 h3
+    rwa [h_sum]
+  h_defect_nonneg := pieces_3pc_defect_nonneg m A (A / Section8_3.a m A) h1 h2 h3
+
+/-!  29.6 Boundary Feasibility Period and Exponent Evaluation -/
+
+/-- Section 8.3 period length evaluates to A / a(m, A) at B = B_min(m, A). -/
+theorem L_general_at_B_min (m : ℕ) (A : ℝ) (hA : A ≠ 0) (ha : Section8_3.a m A ≠ 0)
+    (hQ : LowerFeasibilityBoundary.Q (m : ℝ) A ≠ 0) :
+    Section8_3.L_general m A (LowerFeasibilityBoundary.B_min (m : ℝ) A) = A / Section8_3.a m A := by
+  dsimp [Section8_3.L_general, LowerFeasibilityBoundary.B_min, Section8_3.denom, Section8_3.a]
+  have ha' : 1 - (m : ℝ) * A ≠ 0 := ha
+  have h_num : A * LowerFeasibilityBoundary.Q (m : ℝ) A - A^2 * (A + ((m : ℝ) - 1) * (1 - (m : ℝ) * A)) =
+      A * (1 - (m : ℝ) * A)^2 := by
+    dsimp [LowerFeasibilityBoundary.Q, LowerFeasibilityBoundary.a]
+    ring
+  have h_denom_simp : A - (A^2 / LowerFeasibilityBoundary.Q (m : ℝ) A) * (A + ((m : ℝ) - 1) * (1 - (m : ℝ) * A)) =
+      (A * (1 - (m : ℝ) * A)^2) / LowerFeasibilityBoundary.Q (m : ℝ) A := by
+    have h_sub : A - (A^2 / LowerFeasibilityBoundary.Q (m : ℝ) A) * (A + ((m : ℝ) - 1) * (1 - (m : ℝ) * A)) =
+        (A * LowerFeasibilityBoundary.Q (m : ℝ) A - A^2 * (A + ((m : ℝ) - 1) * (1 - (m : ℝ) * A))) / LowerFeasibilityBoundary.Q (m : ℝ) A := by
+      field_simp [hQ]
+    rw [h_sub, h_num]
+  rw [h_denom_simp]
+  field_simp [hQ, ha', hA]
+
+/-- Strict positivity of phase q2 at the feasibility boundary. -/
+theorem q2_boundary_pos (m : ℕ) (hm : 1 ≤ m) (A : ℝ) (hA : 0 < A) (ha : 0 < Section8_3.a m A) :
+    0 < Section8_3.q2 m A (A / Section8_3.a m A) := by
+  have ha_ne : Section8_3.a m A ≠ 0 := ne_of_gt ha
+  dsimp [Section8_3.q2, Section8_3.len1, Section8_3.len2, Section8_3.x, Section8_3.H]
+  have h_eq : 1 + (m : ℝ) * ((A / Section8_3.a m A) * Section8_3.a m A - A) +
+      ((A / Section8_3.a m A) * A - (A / Section8_3.a m A) * Section8_3.a m A) =
+      Section8_3.a m A + ((m : ℝ) - 1) * A + A^2 / Section8_3.a m A := by
+    field_simp [ha_ne]
+    dsimp [Section8_3.a]
+    ring
+  rw [h_eq]
+  have hm1 : 0 ≤ (m : ℝ) - 1 := by
+    have : (1 : ℝ) ≤ (m : ℝ) := by exact_mod_cast hm
+    linarith
+  have h_term2 : 0 ≤ ((m : ℝ) - 1) * A := mul_nonneg hm1 (le_of_lt hA)
+  have h_term3 : 0 < A^2 / Section8_3.a m A := div_pos (sq_pos_of_ne_zero (ne_of_gt hA)) ha
+  linarith
+
+/-!  29.7 Strictly Positive Boundary Margin Theorem -/
+
+/-- 
+THE STRICTLY POSITIVE BOUNDARY MARGIN THEOREM:
+At the Marnat–Moshchevitin feasibility boundary B = B_min(m, A), the discrete 
+contraction rate of the 3-piece cycle strictly exceeds the phase minimum D(q2).
+-/
+theorem boundary_margin_strictly_positive
+    (m : ℕ) [NeZero m] (hm : 2 ≤ m) (A : ℝ)
+    (hA1 : 1 / ((m : ℝ) + 1) < A) (hA2 : A < 1 / (m : ℝ))
+    (hN_pos : 0 < ConstructiveSection8_3.N_m m A (A / Section8_3.a m A))
+    (h1 : 0 ≤ len1_3pc m A (A / Section8_3.a m A))
+    (h2 : 0 ≤ len2_3pc m A (A / Section8_3.a m A))
+    (h3 : 0 ≤ len3_3pc m A (A / Section8_3.a m A))
+    (h_len : 0 < A / Section8_3.a m A - 1) :
+    0 < DeductiveBridges.avg_contraction (boundary_system m A h1 h2 h3 h_len) -
+        ConstructiveSection8_3.D_q2 m A (LowerFeasibilityBoundary.B_min (m : ℝ) A) := by
+  have hm_ge1 : 1 ≤ m := by omega
+  have hm_pos : 0 < (m : ℝ) := by
+    have : (2 : ℝ) ≤ (m : ℝ) := Nat.cast_le.mpr hm
+    linarith
+  have ha_pos : 0 < Section8_3.a m A := by
+    dsimp [Section8_3.a]
+    have : A * (m : ℝ) < 1 := (lt_div_iff₀ hm_pos).mp hA2
+    linarith
+  have hA_pos : 0 < A := lt_trans (by positivity) hA1
+  have hQ_pos := LowerFeasibilityBoundary.Q_pos (m : ℝ) A (by exact_mod_cast hm_ge1) ha_pos hA_pos
+  have hL_eq := L_general_at_B_min m A (ne_of_gt hA_pos) (ne_of_gt ha_pos) (ne_of_gt hQ_pos)
+
+  have h_avg : DeductiveBridges.avg_contraction (boundary_system m A h1 h2 h3 h_len) =
+      ConstructiveSection8_3.cycle_avg m A (LowerFeasibilityBoundary.B_min (m : ℝ) A) := by
+    dsimp [DeductiveBridges.avg_contraction, boundary_system, ConstructiveSection8_3.cycle_avg]
+    rw [boundary_sum_delta_eq m A ha_pos h1 h2 h3]
+    rw [boundary_cycle_closure m A (A / Section8_3.a m A) h1 h2 h3]
+    rw [hL_eq]
+
+  rw [h_avg]
+  have h_diff := ConstructiveSection8_3.cycle_avg_sub_D_q2_eq m A (LowerFeasibilityBoundary.B_min (m : ℝ) A)
+    (ne_of_gt hA_pos)
+    (by
+      intro h_denom_zero
+      have h_L := Section8_3.L_general m A (LowerFeasibilityBoundary.B_min (m : ℝ) A)
+      dsimp [Section8_3.L_general] at hL_eq
+      rw [h_denom_zero, div_zero] at hL_eq
+      have : A / Section8_3.a m A ≠ 0 := div_ne_zero (ne_of_gt hA_pos) (ne_of_gt ha_pos)
+      exact this hL_eq.symm)
+    (by
+      rw [hL_eq]
+      linarith [h_len])
+    (by
+      rw [hL_eq]
+      exact ne_of_gt (q2_boundary_pos m hm_ge1 A hA_pos ha_pos))
+
+  rw [h_diff, hL_eq]
+  have h_q2_pos := q2_boundary_pos m hm_ge1 A hA_pos ha_pos
+  exact div_pos hN_pos (mul_pos h_len h_q2_pos)
+
+/-- Unconditional strictly positive boundary margin specialization for m = 2. -/
+theorem N_m_boundary_pos_two (A : ℝ) (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2) :
+    0 < ConstructiveSection8_3.N_m 2 A (A / Section8_3.a 2 A) := by
+  have hc : Section6.c A ≠ 0 := by
+    dsimp [Section6.c]; linarith
+  have ha : Section8_3.a 2 A ≠ 0 := by
+    dsimp [Section8_3.a, Section6.c] at *
+    exact hc
+  have h_N_two : ConstructiveSection8_3.N_m 2 A (A / Section8_3.a 2 A) = Section6.N A (A / Section6.c A) := by
+    have h1 : ConstructiveSection8_3.N_m 2 A (A / Section8_3.a 2 A) = ConstructiveSection8_3.N_transformed 2 A 0 := by
+      have := ConstructiveSection8_3.N_m_identity 2 A 0 ha
+      rw [add_zero] at this
+      exact this
+    have h2 := PolynomialBifurcation.N_transformed_two_eq A 0 hc
+    have h3 := Section6.N_identity A 0 hc
+    rw [add_zero] at h3
+    rw [h1, h2, ← h3]
+  rw [h_N_two]
+  have h_N_id := Section6.N_identity A 0 hc
+  rw [add_zero] at h_N_id
+  rw [h_N_id]
+  exact PhaseMinimumToDFSU.N_transformed_pos A hA1 hA2 0 le_rfl
+
+theorem boundary_margin_strictly_positive_two (A : ℝ)
+    (hA1 : 1 / 3 < A) (hA2 : A < 1 / 2)
+    (h1 : 0 ≤ len1_3pc 2 A (A / Section8_3.a 2 A))
+    (h2 : 0 ≤ len2_3pc 2 A (A / Section8_3.a 2 A))
+    (h3 : 0 ≤ len3_3pc 2 A (A / Section8_3.a 2 A))
+    (h_len : 0 < A / Section8_3.a 2 A - 1) :
+    0 < DeductiveBridges.avg_contraction (boundary_system 2 A h1 h2 h3 h_len) -
+        ConstructiveSection8_3.D_q2 2 A (LowerFeasibilityBoundary.B_min 2 A) := by
+  have hm : 2 ≤ 2 := le_rfl
+  have hN_pos := N_m_boundary_pos_two A hA1 hA2
+  exact boundary_margin_strictly_positive 2 hm A (by norm_num; linarith) (by norm_num; linarith) hN_pos h1 h2 h3 h_len
+
+end ConstructiveBoundary3Piece
