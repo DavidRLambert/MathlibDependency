@@ -1780,80 +1780,6 @@ Equation (55) states this gap is exactly (3 * alpha_{k+1} - 1) * t_{k+1}.
 def terminal_lower_gap (alpha t : ℝ) : ℝ :=
   (3 * alpha - 1) * t
 
-/-- 
-Core Geometric Axiom (Equation 56):
-Explicit parameter binders ensure exact argument order (alpha, t, Q_after, Q_before).
--/
-axiom defect_ge_terminal_gap (alpha t Q_after Q_before : ℝ) :
-  terminal_lower_gap alpha t ≤ Q_after - Q_before
-
-/-!  7.3.2 The First Renewal Recurrence -/
-
-/-- 
-Theorem 7.3 (Equation 57): The First Renewal Inequality.
-Dividing the geometric gap bound by t_{k+1} yields the discrete renewal recurrence:
-  z_{k+1} ≥ z_k / L_k + (3 * alpha_{k+1} - 1).
--/
-theorem first_renewal_inequality 
-    (ht_k_pos : 0 < t_k)
-    (ht_pos : 0 < t_k1)
-    (z_k z_k1 L_k : ℝ)
-    (h_z_k : z_k = Q_k / t_k)
-    (h_z_k1 : z_k1 = Q_k1 / t_k1)
-    (h_L_k : L_k = t_k1 / t_k) :
-    z_k / L_k + (3 * alpha_k1 - 1) ≤ z_k1 := by
-  -- Pass arguments in the exact order declared by the axiom
-  have h_geom := defect_ge_terminal_gap alpha_k1 t_k1 Q_k1 Q_k
-  dsimp [terminal_lower_gap] at h_geom
-
-  have ht_k_ne : t_k ≠ 0 := ne_of_gt ht_k_pos
-  have ht_k1_ne : t_k1 ≠ 0 := ne_of_gt ht_pos
-
-  -- Divide geometric gap inequality by t_{k+1} > 0
-  have h_div : (3 * alpha_k1 - 1) ≤ (Q_k1 - Q_k) / t_k1 := by
-    have h_le := div_le_div_of_nonneg_right h_geom (le_of_lt ht_pos)
-    have h_cancel : ((3 * alpha_k1 - 1) * t_k1) / t_k1 = 3 * alpha_k1 - 1 :=
-      mul_div_cancel_right₀ (3 * alpha_k1 - 1) ht_k1_ne
-    rwa [h_cancel] at h_le
-
-  -- Algebraic reduction: (Q_k / t_k) / (t_{k+1} / t_k) = Q_k / t_{k+1}
-  have h_ratio : z_k / L_k = Q_k / t_k1 := by
-    rw [h_z_k, h_L_k]
-    field_simp [ht_k_ne, ht_k1_ne]
-
-  -- Split (Q_{k+1} - Q_k) / t_{k+1} = z_{k+1} - z_k / L_k
-  have h_split : (Q_k1 - Q_k) / t_k1 = z_k1 - z_k / L_k := by
-    rw [h_ratio, h_z_k1]
-    ring
-
-  linarith [h_div, h_split]
-
-/-!  7.3.3 Bridge to Uniform Renewal Form -/
-
-/-- 
-Uniform recurrence step:
-If the local expansion ratio is bounded by L (L_k ≤ L) and the increment 
-satisfies C ≤ 3 * alpha_{k+1} - 1, then the step satisfies the uniform 
-renewal condition z_k / L + C ≤ z_{k+1}.
--/
-theorem uniform_renewal_step
-    (ht_k_pos : 0 < t_k)
-    (ht_pos : 0 < t_k1)
-    (z_k z_k1 L_k L C : ℝ)
-    (h_z_k : z_k = Q_k / t_k)
-    (h_z_k1 : z_k1 = Q_k1 / t_k1)
-    (h_L_k : L_k = t_k1 / t_k)
-    (hz_k_nonneg : 0 ≤ z_k)
-    (hL_k_pos : 0 < L_k)
-    (hL_bound : L_k ≤ L)
-    (hC_bound : C ≤ 3 * alpha_k1 - 1) :
-    z_k / L + C ≤ z_k1 := by
-  have h_rec := first_renewal_inequality t_k t_k1 Q_k Q_k1 alpha_k1
-    ht_k_pos ht_pos z_k z_k1 L_k h_z_k h_z_k1 h_L_k
-  have h_dil : z_k / L ≤ z_k / L_k :=
-    div_le_div_of_nonneg_left hz_k_nonneg hL_k_pos hL_bound
-  linarith
-
 /-!  Section 7.4: Second Renewal Inequality -/
 
 variable (alpha_k alpha_k1 b : ℝ)
@@ -5079,24 +5005,6 @@ theorem z_seq_nonneg (k : ℕ) :
 
 /-! 19.4 The Concrete First & Second Renewal Inequalities -/
 
-/-- First renewal inequality instantiated along the contact sequence. -/
-theorem z_seq_first_renewal (k : ℕ) :
-    data.z_seq k / data.L_seq k + (3 * data.alpha_seq (k + 1) - 1) ≤
-    data.z_seq (k + 1) := by
-  have ht_k := data.t_seq_pos k
-  have ht_k1 := data.t_seq_pos (k + 1)
-  exact GeometricRenewal.first_renewal_inequality
-    (data.contacts.t_seq k)
-    (data.contacts.t_seq (k + 1))
-    (data.Q (data.contacts.t_seq k))
-    (data.Q (data.contacts.t_seq (k + 1)))
-    (data.alpha_seq (k + 1))
-    ht_k ht_k1
-    (data.z_seq k)
-    (data.z_seq (k + 1))
-    (data.L_seq k)
-    rfl rfl rfl
-
 /-- Second renewal inequality bounding the expansion factor L_k. -/
 theorem z_seq_second_renewal (k : ℕ) (b : ℝ)
     (hb_denom : 0 < data.alpha_seq (k + 1) * (1 + b) - b)
@@ -5114,81 +5022,6 @@ theorem z_seq_second_renewal (k : ℕ) (b : ℝ)
     b
     (data.L_seq k)
     ht_k ht_k1 hb_denom rfl hq_pos
-
-/-! 19.5 Discharging ObeysRenewal -/
-
-/-- 
-THE RENEWAL SEQUENCE THEOREM:
-The extracted sequence z_k = Q(t_k) / t_k satisfies the uniform renewal recurrence
-  ∀ k, z_k / L_ε + (3a - 1) ≤ z_{k+1}.
--/
-theorem z_seq_obeys_renewal (a b : ℝ)
-    (ha_le_alpha : ∀ k, a ≤ data.alpha_seq k)
-    (ha_half : a ≤ 1 / 2)
-    (hb_pos : 0 < b)
-    (h_denom_a : 0 < a * (1 + b) - b)
-    (h_denom_k1 : ∀ k, 0 < data.alpha_seq (k + 1) * (1 + b) - b)
-    (h_q_pos : ∀ k, 0 < GeometricRenewal.u_val (data.alpha_seq k) (data.contacts.t_seq k) +
-                      GeometricRenewal.y_val (data.alpha_seq (k + 1)) (data.contacts.t_seq (k + 1)) +
-                      GeometricRenewal.h_val (data.alpha_seq (k + 1)) (data.contacts.t_seq (k + 1))) :
-    GlobalRenewal.ObeysRenewal (data.z_seq) (UniformFreezing.L_eps a b) (3 * a - 1) := by
-  intro k
-  have h_zk := data.z_seq_nonneg k
-  have h_Lk_pos := data.L_seq_pos k
-  have ha_k := ha_le_alpha k
-  have ha_k1 := ha_le_alpha (k + 1)
-  have h_first := data.z_seq_first_renewal k
-  have h_second := data.z_seq_second_renewal k b (h_denom_k1 k) (h_q_pos k)
-  have h_Lk_le := UniformFreezing.L_k_le_L_eps a b (data.alpha_seq k) (data.alpha_seq (k + 1))
-    (data.L_seq k) ha_k ha_k1 ha_half hb_pos h_denom_a (h_denom_k1 k) h_second
-  exact UniformFreezing.uniform_first_renewal a b (data.alpha_seq (k + 1))
-    (data.L_seq k) (data.z_seq k) (data.z_seq (k + 1))
-    h_zk h_Lk_pos ha_k1 h_Lk_le h_first
-
-/-! 19.6 Telescoping Geometric Bound on the Instantiated Sequence -/
-
-/-- Unrolled closed-form geometric lower bound for the contact renewal sequence. -/
-theorem z_seq_unroll_bound (a b : ℝ)
-    (hL_gt_one : 1 < UniformFreezing.L_eps a b)
-    (ha_le_alpha : ∀ k, a ≤ data.alpha_seq k)
-    (ha_half : a ≤ 1 / 2)
-    (hb_pos : 0 < b)
-    (h_denom_a : 0 < a * (1 + b) - b)
-    (h_denom_k1 : ∀ k, 0 < data.alpha_seq (k + 1) * (1 + b) - b)
-    (h_q_pos : ∀ k, 0 < GeometricRenewal.u_val (data.alpha_seq k) (data.contacts.t_seq k) +
-                      GeometricRenewal.y_val (data.alpha_seq (k + 1)) (data.contacts.t_seq (k + 1)) +
-                      GeometricRenewal.h_val (data.alpha_seq (k + 1)) (data.contacts.t_seq (k + 1)))
-    (n : ℕ) :
-    (3 * a - 1) * (1 - (1 / UniformFreezing.L_eps a b) ^ n) *
-      (UniformFreezing.L_eps a b / (UniformFreezing.L_eps a b - 1)) ≤ data.z_seq n := by
-  have h_renew := data.z_seq_obeys_renewal a b ha_le_alpha ha_half hb_pos h_denom_a h_denom_k1 h_q_pos
-  have hz0 := data.z_seq_nonneg 0
-  exact GlobalRenewal.unroll_closed_form_bound (data.z_seq) (UniformFreezing.L_eps a b) (3 * a - 1)
-    h_renew hL_gt_one hz0 n
-
-/-- Asymptotic lower bound on any topological limit of the extracted defect sequence. -/
-theorem z_seq_limit_ge (a b : ℝ) (Z : ℝ)
-    (hL_gt_one : 1 < UniformFreezing.L_eps a b)
-    (ha_le_alpha : ∀ k, a ≤ data.alpha_seq k)
-    (ha_half : a ≤ 1 / 2)
-    (hb_pos : 0 < b)
-    (h_denom_a : 0 < a * (1 + b) - b)
-    (h_denom_k1 : ∀ k, 0 < data.alpha_seq (k + 1) * (1 + b) - b)
-    (h_q_pos : ∀ k, 0 < GeometricRenewal.u_val (data.alpha_seq k) (data.contacts.t_seq k) +
-                      GeometricRenewal.y_val (data.alpha_seq (k + 1)) (data.contacts.t_seq (k + 1)) +
-                      GeometricRenewal.h_val (data.alpha_seq (k + 1)) (data.contacts.t_seq (k + 1)))
-    (hz : Tendsto (data.z_seq) atTop (𝓝 Z)) :
-    (3 * a - 1) * (UniformFreezing.L_eps a b / (UniformFreezing.L_eps a b - 1)) ≤ Z := by
-  have h_renew := data.z_seq_obeys_renewal a b ha_le_alpha ha_half hb_pos h_denom_a h_denom_k1 h_q_pos
-  have hL_pos : 0 < UniformFreezing.L_eps a b := by linarith
-  have h_unroll : ∀ n, (data.z_seq 0) * (1 / UniformFreezing.L_eps a b) ^ n +
-      (3 * a - 1) * GlobalRenewal.geom_sum (1 / UniformFreezing.L_eps a b) n ≤ data.z_seq n := by
-    intro n
-    exact GlobalRenewal.unroll_recurrence (data.z_seq) (UniformFreezing.L_eps a b) (3 * a - 1) h_renew hL_pos n
-  have h_lower := GlobalRenewalLimit.lower_bound_of_unrolled (data.z_seq)
-    (UniformFreezing.L_eps a b) (3 * a - 1) hL_gt_one h_unroll
-  exact GlobalRenewalLimit.le_of_tendsto_limit (data.z_seq)
-    (UniformFreezing.L_eps a b) (3 * a - 1) hL_gt_one h_lower hz
 
 end TrajectoryRenewalData
 
