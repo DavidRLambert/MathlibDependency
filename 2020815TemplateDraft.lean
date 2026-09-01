@@ -1790,62 +1790,6 @@ noncomputable def u_val (alpha t : ℝ) : ℝ := (1 - 2 * alpha) * t
 noncomputable def h_val (alpha t : ℝ) : ℝ := alpha * t
 noncomputable def y_val (alpha t : ℝ) : ℝ := (1 - 2 * alpha) * t
 
-/-- 
-The geometric excursion peak axiom (Equation 60):
-Because P₃(q)/q ≤ b throughout the excursion, evaluating this ratio at the 
-first time q* when P₃ reaches its terminal value h, and applying the 
-structural coordinate constraint x ≤ y, yields this ratio bound.
--/
-axiom excursion_peak_bound (t_k t_k1 alpha_k alpha_k1 b : ℝ) :
-  h_val alpha_k1 t_k1 / (u_val alpha_k t_k + y_val alpha_k1 t_k1 + h_val alpha_k1 t_k1) ≤ b
-
-/-- 
-Theorem 7.4 (Equation 61): Second Renewal Inequality.
-Translating the excursion peak bound into a strict upper cap on the time ratio L_k.
--/
-theorem second_renewal_inequality
-    (ht_pos : 0 < t_k)
-    (_ht1_pos : 0 < t_k1)
-    (h_denom_pos : 0 < alpha_k1 * (1 + b) - b)
-    (h_Lk : L_k = t_k1 / t_k)
-    (h_q_pos : 0 < u_val alpha_k t_k + y_val alpha_k1 t_k1 + h_val alpha_k1 t_k1) :
-    L_k ≤ ((1 - 2 * alpha_k) * b) / (alpha_k1 * (1 + b) - b) := by
-  have h_geom := excursion_peak_bound t_k t_k1 alpha_k alpha_k1 b
-  dsimp [u_val, h_val, y_val] at h_geom h_q_pos
-
-  -- 1. Clear the denominator: h / q* ≤ b ↔ h ≤ b * q*
-  have h_mult : alpha_k1 * t_k1 ≤
-      b * ((1 - 2 * alpha_k) * t_k + (1 - 2 * alpha_k1) * t_k1 + alpha_k1 * t_k1) :=
-    (div_le_iff₀ h_q_pos).mp h_geom
-
-  -- 2. Algebraic ring identity isolating t_{k+1} on the left and t_k on the right
-  have h_ring : b * ((1 - 2 * alpha_k) * t_k + (1 - 2 * alpha_k1) * t_k1 + alpha_k1 * t_k1) -
-      alpha_k1 * t_k1 = t_k * ((1 - 2 * alpha_k) * b) - t_k1 * (alpha_k1 * (1 + b) - b) := by ring
-
-  have h_rearrange : t_k1 * (alpha_k1 * (1 + b) - b) ≤ t_k * ((1 - 2 * alpha_k) * b) := by
-    linarith [h_mult, h_ring]
-
-  -- 3. Rewrite goal with L_k definition and clear fractions directly on the goal
-  rw [h_Lk]
-  rw [div_le_div_iff₀ ht_pos h_denom_pos]
-  have h_comm : t_k * ((1 - 2 * alpha_k) * b) = (1 - 2 * alpha_k) * b * t_k := by ring
-  rwa [h_comm] at h_rearrange
-
-/-- 
-Corollary: Stationary time-dilation bound.
-When alpha_k = alpha_{k+1} = alpha, the excursion dilation ratio L_k is bounded by
-L(alpha, b) = (1 - 2 * alpha) * b / (alpha * (1 + b) - b).
--/
-theorem second_renewal_stationary
-    (alpha : ℝ)
-    (ht_pos : 0 < t_k)
-    (ht1_pos : 0 < t_k1)
-    (h_denom_pos : 0 < alpha * (1 + b) - b)
-    (h_Lk : L_k = t_k1 / t_k)
-    (h_q_pos : 0 < u_val alpha t_k + y_val alpha t_k1 + h_val alpha t_k1) :
-    L_k ≤ ((1 - 2 * alpha) * b) / (alpha * (1 + b) - b) :=
-  second_renewal_inequality t_k t_k1 alpha alpha b L_k ht_pos ht1_pos h_denom_pos h_Lk h_q_pos
-
 end GeometricRenewal
 
 /-!
@@ -5002,26 +4946,6 @@ theorem z_seq_nonneg (k : ℕ) :
   have ht := data.t_seq_pos k
   have hQ := data.Q_nonneg (data.contacts.t_seq k) (le_of_lt ht)
   exact div_nonneg hQ (le_of_lt ht)
-
-/-! 19.4 The Concrete First & Second Renewal Inequalities -/
-
-/-- Second renewal inequality bounding the expansion factor L_k. -/
-theorem z_seq_second_renewal (k : ℕ) (b : ℝ)
-    (hb_denom : 0 < data.alpha_seq (k + 1) * (1 + b) - b)
-    (hq_pos : 0 < GeometricRenewal.u_val (data.alpha_seq k) (data.contacts.t_seq k) +
-                 GeometricRenewal.y_val (data.alpha_seq (k + 1)) (data.contacts.t_seq (k + 1)) +
-                 GeometricRenewal.h_val (data.alpha_seq (k + 1)) (data.contacts.t_seq (k + 1))) :
-    data.L_seq k ≤ ((1 - 2 * data.alpha_seq k) * b) / (data.alpha_seq (k + 1) * (1 + b) - b) := by
-  have ht_k := data.t_seq_pos k
-  have ht_k1 := data.t_seq_pos (k + 1)
-  exact GeometricRenewal.second_renewal_inequality
-    (data.contacts.t_seq k)
-    (data.contacts.t_seq (k + 1))
-    (data.alpha_seq k)
-    (data.alpha_seq (k + 1))
-    b
-    (data.L_seq k)
-    ht_k ht_k1 hb_denom rfl hq_pos
 
 end TrajectoryRenewalData
 
