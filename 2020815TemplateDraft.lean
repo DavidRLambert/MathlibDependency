@@ -2008,99 +2008,6 @@ theorem surgery_strictly_improves (_hm : 1 < m) (hk : 1 < k) (hkm : k < m) (hT :
 end GlobalSurgery
 
 /-!
- General Intermediate Dimension Formula (m ≥ 3)
-Verifying the candidate 4-piece cycle lengths, phase evaluations, 
-period length L derivation, and total contraction mass.
--/
-
-namespace GeneralIntermediate
-
-variable (m A B a x H L : ℝ)
-
-/-!  The Candidate Cycle Lengths -/
-
-/-- First piece: pulling by singleton block down to coordinate A. -/
-def len1 (m A x : ℝ) : ℝ := m * (x - A)
-
-/-- Second piece: zero contraction drift up to height H. -/
-def len2 (H x : ℝ) : ℝ := H - x
-
-/-- Third piece: contraction across to base coordinate a. -/
-def len3 (x a : ℝ) : ℝ := x - a
-
-/-- Fourth piece: top-coordinate contraction over remaining height. -/
-def len4 (m H x : ℝ) : ℝ := (m - 1) * (H - x)
-
-/-- Verification that the 4-piece cycle perfectly bridges the L - 1 period. -/
-theorem cycle_closure (hx : x = L * a) (hH : H = L * A) (ha : a = 1 - m * A) :
-    len1 m A x + len2 H x + len3 x a + len4 m H x = L - 1 := by
-  dsimp [len1, len2, len3, len4]
-  rw [hx, hH, ha]
-  ring
-
-/-!  Phase Evaluations & Period Derivations -/
-
-/-- 
-Phase q₂ at the end of the zero-rate piece, starting from normalized time q = 1.
--/
-def q2 (m A x H : ℝ) : ℝ := 1 + len1 m A x + len2 H x
-
-/-- Verification of the simplified phase q₂ at the end of the second piece. -/
-theorem q2_eval (hx : x = L * a) (hH : H = L * A) (ha : a = 1 - m * A) :
-    q2 m A x H = a + L * ((m - 1) * a + A) := by
-  dsimp [q2, len1, len2]
-  rw [hx, hH, ha]
-  ring
-
-/-- 
-Verifying the L formula derived from matching the target exponent B at phase q₂.
-If B = H / q₂, then L matches the exact closed-form fraction.
--/
-theorem L_derivation (hx : x = L * a) (hH : H = L * A) (ha : a = 1 - m * A)
-    (h_denom : A - B * (A + (m - 1) * a) ≠ 0)
-    (hq2_ne : q2 m A x H ≠ 0) :
-    B = H / q2 m A x H ↔ L = (a * B) / (A - B * (A + (m - 1) * a)) := by
-  have hq2_eq : q2 m A x H = a + L * ((m - 1) * a + A) := q2_eval m A a x H L hx hH ha
-  have hq2_denom : a + L * ((m - 1) * a + A) ≠ 0 := by rwa [← hq2_eq]
-  rw [hq2_eq, hH]
-  rw [eq_div_iff hq2_denom, eq_div_iff h_denom]
-  constructor
-  · intro h
-    calc L * (A - B * (A + (m - 1) * a))
-      _ = L * A - B * (a + L * ((m - 1) * a + A)) + a * B := by ring
-      _ = L * A - L * A + a * B := by rw [← h]
-      _ = a * B := by ring
-  · intro h
-    calc B * (a + L * ((m - 1) * a + A))
-      _ = L * A - (L * (A - B * (A + (m - 1) * a)) - a * B) := by ring
-      _ = L * A - (a * B - a * B) := by rw [h]
-      _ = L * A := by ring
-
-/-!  Total Contraction Mass -/
-
--- Contraction rates δ for the 4 pieces
-def rate1 (m : ℝ) : ℝ := m - 1
-def rate2 : ℝ := 0
-def rate3 (m : ℝ) : ℝ := m
-def rate4 (m : ℝ) : ℝ := m - 1
-
-/-- Total integrated contraction mass V over the 4-piece cycle. -/
-def V (m A a x H : ℝ) : ℝ :=
-  len1 m A x * rate1 m +
-  len2 H x * rate2 +
-  len3 x a * rate3 m +
-  len4 m H x * rate4 m
-
-/-- Algebraic reduction of the total contraction mass matching Equation (24). -/
-theorem V_eq (ha : a = 1 - m * A) :
-    V m A a x H = (2 * m - 1) * x + (m - 1)^2 * H - m * (1 - A) := by
-  dsimp [V, len1, len2, len3, len4, rate1, rate2, rate3, rate4]
-  rw [ha]
-  ring
-
-end GeneralIntermediate
-
-/-!
  Section 8.4: Threshold Boundary Contraction Rate
 Verifying the polynomial identity N(r) and the strict positivity of the boundary phase.
 -/
@@ -2313,31 +2220,6 @@ theorem global_maximum_at_q_max (D : ℝ → ℝ) (L : ℝ) (hL_gt_one : 1 < L) 
   exact hq_max (base_phase L hL_gt_one q hq) bounds.1 bounds.2
 
 end GlobalPeriodicExtension
-
--- Downstream compatibility alias namespace for Sections 16, 17, and 18. 
-namespace ConstructiveGlobalPeriodicExtension
-  open GlobalPeriodicExtension
-
-  export GlobalPeriodicExtension (
-    IsMultiplicativelyPeriodic D_scale_inv_pow
-    one_add_mul_le_pow exists_pow_gt base_nat base_nat_spec
-    base_phase base_phase_bounds base_phase_eq
-    IsFirstPeriodMinimum IsFirstPeriodMaximum
-    global_minimum_at_q2 global_maximum_at_q_max
-  )
-  
-  theorem constructive_global_minimum_at_q2 (D : ℝ → ℝ) (L : ℝ) (hL_gt_one : 1 < L) (q2 : ℝ)
-      (h_per : IsMultiplicativelyPeriodic D L)
-      (hq2_min : IsFirstPeriodMinimum D L q2) (q : ℝ) (hq : 1 ≤ q) :
-      D q2 ≤ D q :=
-    GlobalPeriodicExtension.global_minimum_at_q2 D L hL_gt_one q2 h_per hq2_min q hq
-
-  theorem constructive_global_maximum_at_q_max (D : ℝ → ℝ) (L : ℝ) (hL_gt_one : 1 < L) (q_max : ℝ)
-      (h_per : IsMultiplicativelyPeriodic D L)
-      (hq_max : IsFirstPeriodMaximum D L q_max) (q : ℝ) (hq : 1 ≤ q) :
-      D q ≤ D q_max :=
-    GlobalPeriodicExtension.global_maximum_at_q_max D L hL_gt_one q_max h_per hq_max q hq
-end ConstructiveGlobalPeriodicExtension
 
 /-!
  Section 7.2 - 7.4: Geometric Derivation of Renewal Axioms
@@ -3388,7 +3270,7 @@ end UnifiedTheorems
 
 namespace TrajectoryIsomorphism
 
-open Section5 Section6 DeductiveBridges ConstructiveSection6 ConstructiveGlobalPeriodicExtension ExcursionTopology
+open Section5 Section6 DeductiveBridges ConstructiveSection6 ExcursionTopology GlobalPeriodicExtension
 
 variable (A B : ℝ)
 
@@ -3840,7 +3722,7 @@ namespace PhaseMinimumToDFSU
 
 open LinearPiece
 open Section5 Section6 ConstructiveSection6 DeductiveBridges ConstructiveBridges
-open GlobalPeriodicExtension ConstructiveGlobalPeriodicExtension TrajectoryIsomorphism PhaseDynamics
+open GlobalPeriodicExtension TrajectoryIsomorphism PhaseDynamics 
 
 variable (A B : ℝ)
 variable (U W : ℝ)
@@ -4112,7 +3994,7 @@ theorem running_phase_avg_ge_D_q2
     (hq2_min : IsFirstPeriodMinimum D_cont L q2)
     (q : ℝ) (hq : 1 ≤ q) :
     D_cont q2 ≤ D_cont q :=
-  constructive_global_minimum_at_q2 D_cont L hL q2 h_per hq2_min q hq
+    global_minimum_at_q2 D_cont L hL q2 h_per hq2_min q hq
 
 /-! 17.6 Direct Wiring into the DFSU Lower Bound Bridge -/
 
@@ -4171,7 +4053,7 @@ end PhaseMinimumToDFSU
 namespace TrajectoryContinuity
 
 open Section5 Section6 DeductiveBridges ConstructiveSection6
-open ConstructiveGlobalPeriodicExtension ExcursionTopology TrajectoryIsomorphism
+open GlobalPeriodicExtension ExcursionTopology TrajectoryIsomorphism
 
 /-!  18.1 Piecewise Min-Max Representations of Base Coordinates -/
 
